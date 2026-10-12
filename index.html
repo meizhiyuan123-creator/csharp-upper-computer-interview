@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>C# 上位机面试核心知识库 & 自测记忆系统</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="C#上位机面经">
+  <meta name="theme-color" content="#0a0d14">
+  <link rel="stylesheet" href="app_data/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- 顶部 Header -->
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-badge">.NET 8 / WPF</span>
+        <div>
+          <h1 class="brand-title">C# 上位机面试知识库 & 自测记忆系统</h1>
+          <div class="brand-sub">面向设备测控 / 工业视觉 / WPF / 硬件通信 · 专属核心考点</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="toggleAllBtn" class="action-btn">📖 一键展开</button>
+        <button id="themeToggle" class="theme-toggle-btn">☀️ 明亮模式</button>
+      </div>
+    </header>
+
+    <!-- 规范引导条 -->
+    <div class="guideline-banner">
+      <div>
+        <strong>📌 录入准则保障：</strong> 本知识库严格遵循本地《C#上位机知识库准录与评估规范》，已彻底剔除淘汰技术（WebForms/Remoting等），聚焦 WPF、Modbus/串口、多线程、GC、海康相机及底层互操作。
+      </div>
+    </div>
+
+    <!-- 掌握度与复习进度仪表盘 -->
+    <section class="dashboard-grid">
+      <div class="metric-card">
+        <div class="metric-title">总收录核心题</div>
+        <div class="metric-value" id="totalCount">0 <small>题</small></div>
+        <div class="metric-bar"><div class="metric-bar-fill" style="width: 100%; background: var(--accent-blue);"></div></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">熟练掌握</div>
+        <div class="metric-value" id="masteredCount" style="color: var(--accent-green);">0 <small>题</small></div>
+        <div class="metric-bar"><div class="metric-bar-fill" id="progressBar" style="width: 0%;"></div></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">待复习 / 模糊</div>
+        <div class="metric-value" id="reviewCount" style="color: var(--accent-yellow);">0 <small>题</small></div>
+        <div class="metric-bar"><div class="metric-bar-fill" style="width: 100%; background: var(--accent-yellow);"></div></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">重点攻关</div>
+        <div class="metric-value" id="urgentCount" style="color: var(--accent-red);">0 <small>题</small></div>
+        <div class="metric-bar"><div class="metric-bar-fill" style="width: 100%; background: var(--accent-red);"></div></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">整体掌握度</div>
+        <div class="metric-value" id="progressPercent" style="color: var(--accent-cyan);">0%</div>
+        <div class="metric-bar"><div class="metric-bar-fill" style="width: 100%; background: var(--accent-cyan);"></div></div>
+      </div>
+    </section>
+
+    <!-- 过滤与搜索控制器 -->
+    <section class="filter-panel">
+      <!-- 搜索行与模式切换 -->
+      <div class="search-row">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" class="search-input" placeholder="输入关键字、考点标签（如：Dispatcher、粘包、Channel、GC、WriteableBitmap...）">
+        </div>
+        <div class="view-mode-toggle">
+          <button id="modeFlashcard" class="mode-btn active" title="先看题目在脑中思考，点击再揭晓答案">🃏 自测背题模式</button>
+          <button id="modeBrowse" class="mode-btn" title="全部展开答案，适合快速通读">📑 全景浏览模式</button>
+        </div>
+      </div>
+
+      <!-- 模块分类 Tab -->
+      <div class="filter-tabs" id="moduleTabs">
+        <button class="filter-tab active" data-module="ALL">全部模块</button>
+        <button class="filter-tab" data-module="WPF与工业桌面开发">🖥️ WPF与桌面开发</button>
+        <button class="filter-tab" data-module="工业通信与测控协议">🔌 工业通信与测控</button>
+        <button class="filter-tab" data-module="多线程与高并发">⚡ 多线程与高并发</button>
+        <button class="filter-tab" data-module="CLR底层与内存优化">🧠 CLR与内存GC</button>
+        <button class="filter-tab" data-module="工业相机与视觉及底层">📷 工业相机与底层</button>
+        <button class="filter-tab" data-module="C#与.NET8核心基础">⚙️ C#与.NET8基础</button>
+        <button class="filter-tab" data-module="经典题与历史归档">📚 经典题归档</button>
+      </div>
+
+      <!-- 星级与状态细化筛选 -->
+      <div class="sub-filter-row">
+        <div class="star-filters">
+          <span style="font-size: 12px; color: var(--text-muted); margin-right: 4px;">重要程度:</span>
+          <button class="filter-pill active" data-star="ALL">全部星级</button>
+          <button class="filter-pill" data-star="5">⭐⭐⭐⭐⭐ 5星必背</button>
+          <button class="filter-pill" data-star="4">⭐⭐⭐⭐ 4星高频</button>
+          <button class="filter-pill" data-star="3">⭐⭐⭐ 3星基础</button>
+        </div>
+        <div class="status-filters">
+          <span style="font-size: 12px; color: var(--text-muted); margin-right: 4px;">掌握筛选:</span>
+          <button class="filter-pill active" data-status="ALL">全部</button>
+          <button class="filter-pill" data-status="UNMASTERED">只看未掌握</button>
+          <button class="filter-pill" data-status="URGENT">🔥 重点题</button>
+          <button class="filter-pill" data-status="REVIEW">🤔 待复习</button>
+          <button class="filter-pill" data-status="MASTERED">✅ 已掌握</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 题目卡片列表区 -->
+    <main class="question-list" id="questionList">
+      <!-- 动态由 app.js 渲染 -->
+    </main>
+  </div>
+
+  <!-- 引入数据源与交互脚本 -->
+  <script src="app_data/questions_data.js"></script>
+  <script src="app_data/app.js"></script>
+</body>
+</html>

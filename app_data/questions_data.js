@@ -1,0 +1,420 @@
+// C# 上位机面试知识库数据集 - 自动生成
+window.INTERVIEW_QUESTIONS = [
+  {
+    "id": "WPF-01",
+    "module": "WPF与工业桌面开发",
+    "stars": 5,
+    "tags": [
+      "WPF",
+      "UI卡顿",
+      "Dispatcher",
+      "死锁防范"
+    ],
+    "title": "WPF 中跨线程更新 UI 的底层机制是什么？Dispatcher.Invoke 与 BeginInvoke 有何本质区别？如何避免主线程死锁？",
+    "summary": "1. **定性**：WPF 遵循单线程单元（STA）模型，UI 元素只能由创建它的主 UI 线程访问，后台线程必须通过关联的 `Dispatcher` 调度。\n2. **底层原理**：`Invoke` 是同步阻塞调用，当前后台线程挂起等待 UI 线程执行完；`BeginInvoke` 是异步入队立即返回，将委托推入 UI 消息循环优先级队列。\n3. **防死锁与避坑**：禁止在 UI 线程上对含有 `Dispatcher.Invoke` 的后台 Task 调用 `.Result` 或 `.Wait()`（经典双向等待死锁）；工控高频刷新推荐使用 `BeginInvoke` + 降频合并，避免 UI 消息泵被撑爆。",
+    "detail": "### 1. STA 与线程亲和性（Thread Affinity）\nWPF 几乎所有控件都继承自 `DispatcherObject`。其内部维护了一个 `VerifyAccess()` 方法，每次读写属性都会检查当前调用线程的 ManagedThreadId 是否等于创建该对象的 UI 线程 ID。如果不一致，立即抛出 `InvalidOperationException`。\n\n### 2. Invoke vs BeginInvoke 底层差异\n- **Invoke(Action, DispatcherPriority)**：向 Dispatcher 的优先队列插入操作项（DispatcherOperation），然后通过内部 Win32 消息循环或同步信号量阻塞调用方线程，直到 UI 线程调度并执行完成。如果 UI 线程正忙，后台线程会一直处于等待阻塞状态。\n- **BeginInvoke(Action, DispatcherPriority)**：仅仅是将操作项包装后推入 Dispatcher 队列，返回 `DispatcherOperation` 句柄，后台线程立即继续往下执行，实现完全解耦。\n\n### 3. 典型死锁诱发与防御\n- **死锁场景**：UI 线程调用 `var res = Task.Run(() => { Application.Current.Dispatcher.Invoke(...); }).Result;`。UI 线程在等待 Task 结束，而 Task 内部的 Invoke 在等待 UI 线程调度执行，双方互相持有并等待，造成永久死锁。\n- **防御策略**：\n  1. 彻底使用 `async/await`，禁止在 UI 线程同步等待 `.Wait()` 或 `.Result`。\n  2. 善用 `SynchronizationContext` 或在非 UI 逻辑中使用 `.ConfigureAwait(false)` 跳出 UI 上下文。",
+    "practice": "在工业上位机（如步态分析或电机测控）中，后台串口/网络每秒收到 100~500 帧高频传感器数据，**绝对不能来一帧就调一次 `Dispatcher.Invoke`**，否则主线程消息循环会被高频切入打崩，造成界面冻结。工程标准做法是：后台存入并发缓冲队列，UI 侧挂载 30~60Hz 的 `DispatcherTimer` 或 CompositionTarget.Rendering，定期批量拉取数据并调用 `BeginInvoke(..., DispatcherPriority.Background)` 批量更新。",
+    "follow_ups": [
+      "Q: DispatcherPriority 各优先级怎么选？（答：常规更新用 Normal/Render，降频批量绘图用 Background/ContextIdle，避免抢占鼠标键盘交互）",
+      "Q: 为什么不建议用 Control.CheckForIllegalCrossThreadCalls = false？（答：WinForms的粗暴开关破坏了线程安全，WPF根本不支持该属性，底层由DispatcherObject强校验）"
+    ]
+  },
+  {
+    "id": "WPF-02",
+    "module": "WPF与工业桌面开发",
+    "stars": 5,
+    "tags": [
+      "WPF",
+      "MVVM",
+      "依赖属性",
+      "INotifyPropertyChanged"
+    ],
+    "title": "简述 WPF 的 MVVM 模式及数据绑定核心原理，INotifyPropertyChanged 与 DependencyProperty（依赖属性）有何区别？",
+    "summary": "1. **定性**：MVVM 通过 View、ViewModel、Model 将界面展现、业务状态与底层数据彻底解耦，纽带是 WPF 的 Binding 双向绑定系统。\n2. **实现差异**：`INotifyPropertyChanged`（INPC）是在 ViewModel 普通 CLR 属性变更时触发 `PropertyChanged` 事件通知 UI 刷新；`DependencyProperty`（DP）是依托 WPF 全局属性存储系统的静态只读字段，支持样式继承、动画、元数据与值继承。\n3. **上位机选型**：自定义控件内部必须定义依赖属性才能被外部 XAML 绑定；而在 ViewModel 业务层则通过实现 INPC（如 Prism 的 BindableBase 或 CommunityToolkit.Mvvm 的 ObservableObject）来驱动视图。",
+    "detail": "### 1. WPF 绑定引擎工作机制\n当 XAML 中声明 `{Binding Path=CurrentSpeed}` 时，WPF 的 BindingEngine 会利用反射或动态方法监听源对象的变更：\n- 如果源实现了 `INotifyPropertyChanged`，BindingEngine 注册其 `PropertyChanged` 弱事件（Weak Event），当属性改变时通知目标 UI 属性更新。\n- 如果是普通属性且未实现 INPC，Binding 只能进行一次性单向读取（OneTime）。\n\n### 2. DependencyProperty 底层机制与优势\n- **内存节约**：普通 CLR 属性每个对象实例都占用内存槽位；而依赖属性是类作用域的 `static readonly DependencyProperty`，通过哈希表字典仅在设置了非默认值时才分配存储空间，一个拥有 200 个属性的 UI 控件，默认情况下内存消耗极小。\n- **高级特性支持**：支持属性值继承（如 FontSize）、Style 样式变更、Trigger 触发器响应、故事板动画（StoryBoard）插值驱动。",
+    "practice": "在上位机开发自定义仪器仪表控件（如自定义跑台电机速度计、足底压力色谱图）时，为了让外部能在 XAML 中直接双向绑定 `Speed` 或 `PressureValue`，必须使用 `DependencyProperty.Register` 注册依赖属性；而在 ViewModel 编写时，使用 CommunityToolkit.Mvvm 的 `[ObservableProperty]` 源生成器自动生成高效的 INPC 代码，既消除了反射开销，又保持了代码极其简洁。",
+    "follow_ups": [
+      "Q: 为什么 ViewModel 中不能直接使用 DependencyProperty 代替 INPC？（答：DP 必须继承自 DependencyObject，这会导致 ViewModel 强依赖 WPF UI 库，无法做跨平台单元测试，且破坏了 MVVM 的纯洁性）",
+      "Q: 如果 Binding 绑定的集合需要动态增删元素，使用普通 List 可以吗？（答：不行，必须使用 ObservableCollection<T>，其实现了 INotifyCollectionChanged 接口）"
+    ]
+  },
+  {
+    "id": "WPF-03",
+    "module": "WPF与工业桌面开发",
+    "stars": 5,
+    "tags": [
+      "WPF",
+      "高帧率图像",
+      "WriteableBitmap",
+      "渲染性能优化"
+    ],
+    "title": "工业上位机中，高帧率工业相机图像（如 120 FPS）或海量测控波形在 WPF 中如何实现无卡顿高性能渲染？",
+    "summary": "1. **卡顿根因**：传统创建 `BitmapSource` 并频繁赋值给 `Image.Source` 会导致托管堆产生海量大对象（LOH）并引发 GC 频繁触发卡顿，且 WPF 的 DX 渲染管线合成成本过高。\n2. **核心解法**：使用 `WriteableBitmap` 实现内存直接映射，复用单一图像对象，结合后台非托管内存拷贝（`RtlMoveMemory` 或指针直接写入）以及 `Lock() / AddDirtyRect() / Unlock()` 机制更新脏区。\n3. **实战配合**：将数据采集、解压与渲染彻底分频解耦，后台 120 FPS 异步写入缓冲队列，前台 UI 渲染通过 `CompositionTarget.Rendering` 限制为 30/60 FPS 刷新，杜绝无效超额渲染。",
+    "detail": "### 1. 传统渲染的致命缺陷\n如果每次相机回调都 `new BitmapImage` 或 `BitmapSource.Create`：\n- 每一帧 1080P RGB 图像约 6MB，120 FPS 下每秒产生超过 700MB 临时对象，数秒内直接打爆 Gen 2 和 LOH（大对象堆），触发频繁的 GC Stop-The-World，界面肉眼可见持续卡死掉帧。\n\n### 2. WriteableBitmap 高性能管线原理\n- 在初始化时分配固定分辨率的 `WriteableBitmap` 实例，绑定至 UI 的 `Image` 控件。\n- 每一帧相机底层 SDK 回调（通常给的是非托管内存指针 `IntPtr pBuffer`）：\n  ```csharp\n  writeableBitmap.Lock();\n  // 直接通过非托管内存复制，避免托管堆分配\n  unsafe {\n      Buffer.MemoryCopy(pBuffer.ToPointer(), writeableBitmap.BackBuffer.ToPointer(), bufferSize, bufferSize);\n  }\n  writeableBitmap.AddDirtyRect(new Int32Rect(0, 0, width, height));\n  writeableBitmap.Unlock();\n  ```\n- WPF 的渲染引擎只会将 GPU 显存与脏矩形同步，实现零 GC 分配和毫秒级 GPU 贴图更新。",
+    "practice": "在三路工业相机同步采集系统中：相机 SDK 采用独立后台线程无锁环形队列（RingBuffer）拉取裸流，落盘线程通过 `System.Threading.Channels` 异步流式写入 SSD，而 UI 预览模块通过 `WriteableBitmap` 共享内存做降频渲染（例如 30FPS 刷新），将 CPU 占用从原先的 80%+ 骤降至 15% 以内，彻底告别掉帧与卡顿。",
+    "follow_ups": [
+      "Q: 海量测控实时动态波形（如 10 万点传感器曲线）在 WPF 中怎么画？（答：禁止使用 XAML Polyline 或 Canvas 频繁创建 Path，应使用专用高性能组件如 ScottPlot、SciChart，或者重写 OnRender 使用 DrawingContext.DrawLines 直连底层渲染流）"
+    ]
+  },
+  {
+    "id": "WPF-04",
+    "module": "WPF与工业桌面开发",
+    "stars": 4,
+    "tags": [
+      "WPF",
+      "Prism",
+      "模块化架构",
+      "EventAggregator"
+    ],
+    "title": "Prism 框架在工业上位机中如何实现模块化解耦？EventAggregator 与传统 C# Event 相比有何本质区别？",
+    "summary": "1. **模块化价值**：上位机系统通常包含相机模块、运动控制模块、传感器分析模块与报表模块，Prism 通过 `IModule` 动态加载，实现不同工控机型的插件化装配。\n2. **IOC生命周期**：基于 DryIoc 或 Unity 注册服务为 Singleton（硬件通信服务单例）或 Transient，降低硬编码依赖。\n3. **EventAggregator 机制**：传统 Event 要求发布者与订阅者互相持有引用（强耦合且易引起内存泄漏）；事件聚合器基于中介者模式与**弱引用（WeakReference）**，实现跨模块发布/订阅，支持指定主线程调度并自动回收死监听。",
+    "detail": "### 1. Prism 模块化目录结构与装配\n通过 `ModuleCatalog` 可以从代码、XAML 或扫描指定 Plugins 文件夹动态发现并初始化模块。各模块通过 `IModule.RegisterTypes` 向全局容器注入各自的 ViewModel 和驱动服务。\n\n### 2. EventAggregator 底层弱引用实现\n- 传统委托事件：发布者对象内部保存了订阅者对象的强引用列表。若订阅者是临时打开的弹窗或短生命周期页面且未手动 `-=` 注销事件，发布者（往往是长生命周期的设备通信单例）就会导致该页面永远无法被 GC 回收，形成典型内存泄漏。\n- `EventAggregator`：通过 `PubSubEvent<TPayload>` 管理订阅，底层维护 `WeakReference` 弱引用。当订阅者页面关闭后，即使没显式 Unsubscribe，GC 也能安全回收它。\n- **线程调度内置**：`eventAggregator.GetEvent<DevAlarmEvent>().Subscribe(OnAlarm, ThreadOption.UIThread)` 可直接声明在主 UI 线程回调，省去手动 Dispatcher 调度的繁琐。",
+    "practice": "在多通道神经机电测控上位机中，设计了统一硬件抽象层（HAL）。通过 Prism 模块化机制，当现场从“3路相机单跑台”配置切换为“转棒疲劳仪+双路电刺激”配置时，只需替换配置文件加载的 Module DLL，核心业务架构代码完全无需修改复用率达 80% 以上。",
+    "follow_ups": [
+      "Q: RegionManager 的原理是什么？（答：在 View 中预留占位符 Region，由控制器动态将指定的 UserControl 导航/注入到该区域，实现界面的多视窗动态拼装）"
+    ]
+  },
+  {
+    "id": "COMM-01",
+    "module": "工业通信与测控协议",
+    "stars": 5,
+    "tags": [
+      "通信",
+      "串口RS485",
+      "TCP",
+      "粘包断包"
+    ],
+    "title": "工业上位机通过串口（RS485/RS232）或 TCP 与下位机/PLC 通信时，如何彻底解决粘包、半包与数据不完整问题？",
+    "summary": "1. **定性**：底层通信（无论 TCP 流式传输还是串口缓冲区轮询读取）都是无边界的字节流（Stream），没有天然的“数据包”概念，粘包与半包是物理层与传输层的必然现象。\n2. **核心解法**：设计**应用层协议定界机制**（定长法、特殊包头包尾法、或【帧头 + 长度域 + 数据载荷 + CRC校验 + 帧尾】结构）。\n3. **工程落地**：上位机维护环形缓冲区或 `MemoryStream` 缓存，采用状态机解析：先找帧头，字节不足等下次，字节满足则校验 CRC，校验通过切分完整数据包并投递，校验失败滑移 1 字节重新寻头。",
+    "detail": "### 1. 粘包与断包产生根因\n- **粘包（多合一）**：下位机连续快速发送两帧（如 `AA 01 02 FF` 与 `AA 02 03 FF`），上位机单次 `SerialPort.Read` 一次性读出 8 字节。\n- **半包（一拆多）**：下位机发出一帧 20 字节的数据，上位机串口缓冲区由于波特率与扫描周期差异，第一次读到 12 字节，第二次读到 8 字节。\n\n### 2. 状态机分包算法标准流程\n```\n[接收字节] -> 追加到 Buffer 缓冲区\n  └─> 检查缓冲区长度是否 >= 最小帧头长度\n        ├─ 是 -> 扫描帧头 (例如 0x5A 0xA5)\n        │          ├─ 找到帧头 -> 读取长度字段 L\n        │          │                ├─ Buffer.Length >= L -> 提取该帧 -> 校验 CRC16\n        │          │                │                            ├─ 成功 -> 触发 OnPacketReceived，从 Buffer 剔除这 L 字节\n        │          │                │                            └─ 失败 -> 剔除帧头首字节，向后滑动 1 字节继续找\n        │          │                └─ 字节数不足 L -> 退出等待下一次数据到来\n        │          └─ 未找到帧头 -> 清理无用杂质字节\n        └─ 否 -> 退出等待\n```",
+    "practice": "在 RS485 设备通信模块中，针对 Modbus-RTU 这种依赖无传输字符间隔（3.5个字符时间）判帧的协议，若波特率为 115200，3.5T 仅约 0.35ms，操作系统线程调度抖动极易导致半包。实战方案是结合协议长度预判与自实现滑动窗口环形缓冲区（RingBuffer），收到后先根据功能码（如 0x03 读保持寄存器其返回长度为 3 + 字节计数 + 2 字节 CRC）动态计算预期整包长度，配合 CRC16 校验，实现了千万次通信 0 粘包 0 误判。",
+    "follow_ups": [
+      "Q: 为什么串口通信在大量干扰时不能只用 Try-Catch 忽略异常？（答：工业现场变频器或强电干扰会导致串行信号毛刺，丢弃会导致寄存器时序错乱，必须有 CRC 校验和重发机制）"
+    ]
+  },
+  {
+    "id": "COMM-02",
+    "module": "工业通信与测控协议",
+    "stars": 5,
+    "tags": [
+      "通信",
+      "Modbus-RTU",
+      "CRC16",
+      "指令队列与重连"
+    ],
+    "title": "Modbus-RTU 协议的帧结构是什么？PLC/从机响应超时的重发机制与多指令优先级队列如何设计？",
+    "summary": "1. **帧结构**：【从机地址 1B】 + 【功能码 1B】 + 【数据段 N 字节】 + 【CRC16 校验低字节 + 高字节】。\n2. **通信半双工特性**：RS485 是半双工总线，任何时刻只能有一台主机发起问询并等待单台从机应答，严禁多线程并发裸写串口，否则必然导致总线总线数据冲突乱码。\n3. **架构解法**：设计**线程安全的单线程消费指令队列（Command Queue）**，支持优先级插队（如急停指令高优先级插队），结合 `CancellationTokenSource` 超时令牌控制单次等待（如 200ms），失败自动重发 3 次，连续多次超时触发状态机断线报警与重连。",
+    "detail": "### 1. 常用功能码速记\n- `0x01` / `0x02`：读线圈（Coil） / 读离散输入（Discrete Input）\n- `0x03` / `0x04`：读保持寄存器（Holding Register） / 读输入寄存器（Input Register）\n- `0x05` / `0x06`：写单个线圈 / 写单个保持寄存器\n- `0x10` (16)：写多个保持寄存器（批量下发速度或参数常用）\n\n### 2. 健壮的工控指令调度队列架构\n```csharp\npublic class ModbusCommandChannel {\n    // 基于优先级队列或双端队列\n    private readonly PriorityQueue<ModbusCommand, int> _queue = new();\n    private readonly SemaphoreSlim _lock = new(1, 1);\n\n    public async Task ProcessQueueAsync(CancellationToken ct) {\n        while (!ct.IsCancellationRequested) {\n            var cmd = await DequeueNextAsync();\n            for (int retry = 0; retry < 3; retry++) {\n                await SendBytesAsync(cmd.RequestBytes);\n                var (success, response) = await WaitForResponseAsync(cmd.TimeoutMs);\n                if (success && VerifyCrc(response)) {\n                    cmd.SetResult(response);\n                    break;\n                }\n                if (retry == 2) cmd.SetException(new TimeoutException());\n            }\n        }\n    }\n}\n```",
+    "practice": "在科研医疗仪器上位机中，电机的实时速度采集属于常规周期性指令（低优先级），而用户的“急停按键”或“限位光电触发”属于紧急指令（高优先级）。指令队列支持优先级调度，当触发急停时立即将 0x06 写寄存器停止指令插入队首，在 20ms 内完成伺服停机，保障实验人机安全。",
+    "follow_ups": [
+      "Q: CRC16 查表法和直接移位计算法哪个好？（答：查表法以 512 字节空间换时间，微秒级完成，工控高频通信首选查表法）",
+      "Q: 断线重连时，串口 Port.Open 容易卡死几秒怎么办？（答：必须将重连逻辑完全移到后台 Task 执行，禁止在 UI 主线程直接调用 serialPort.Open()）"
+    ]
+  },
+  {
+    "id": "COMM-03",
+    "module": "工业通信与测控协议",
+    "stars": 4,
+    "tags": [
+      "通信",
+      "OPC UA",
+      "Modbus对比",
+      "节点订阅"
+    ],
+    "title": "OPC UA 与传统 Modbus 相比有哪些核心优势？在上位机中如何实现节点数据订阅（Subscription）与值变化监听？",
+    "summary": "1. **协议层级差异**：Modbus 是扁平寄存器地址（只有无含义的 40001 偏移），无数据类型语义；OPC UA 是面向对象的工业通信标准，支持自描述信息模型、命名空间、丰富数据类型与严密安全加密认证（X.509 证书）。\n2. **通信模式跨越**：Modbus 只能由上位机不断低效轮询（Polling），占用总线带宽；OPC UA 支持**发布-订阅（Pub/Sub）机制**，仅在 PLC 变量发生变化时主动推送（Report by Exception）。\n3. **C# 开发实现**：基于官方 `Opc.UaFx` 或 `Opc.Ua.Client` 库，建立 Session 会话后创建 `Subscription`，添加 `MonitoredItem` 监听指定 NodeId，挂载 `Notification` 事件实现无感知异步更新。",
+    "detail": "### 1. 核心对比矩阵\n| 维度 | Modbus-RTU / TCP | OPC UA |\n| :--- | :--- | :--- |\n| **数据模型** | 扁平寄存器（0/1/3/4区），无元数据 | 树状节点（NodeId）、对象、变量、方法、强类型 |\n| **传输开销** | 必须定时轮询（大量重复读），总线负载重 | 变化推送（MonitoredItem），节省 80% 工业网络带宽 |\n| **安全性** | 明文传输，无权限控制，易受攻击 | 支持 TLS/SSL 加密、数字签名、用户角色权限鉴权 |\n| **跨平台** | 依赖串口或 Socket 报文解析 | 跨平台统一标准，原生支持 Linux/Windows/Docker |",
+    "practice": "在多通道机电综合测控上位机中，设计了 Modbus + OPC UA 双层架构：底层小型自研控制器采用 Modbus-RTU 快速直连，厂区西门子 S7-1500 PLC 与环境智能网关通过 OPC UA 对接。通过订阅 PLC 的报警节点，当出现急停或过载时毫秒级收到推送并触发上位机联锁停机，无需上位机耗费 CPU 循环轮询。",
+    "follow_ups": [
+      "Q: OPC UA 订阅的 PublishingInterval 和 SamplingInterval 有什么区别？（答：SamplingInterval 是服务器采样硬件寄存器的周期，PublishingInterval 是服务器向客户端批量推送更新包的周期）"
+    ]
+  },
+  {
+    "id": "THR-01",
+    "module": "多线程与高并发",
+    "stars": 5,
+    "tags": [
+      "多线程",
+      "Channel",
+      "高频采集",
+      "生产消费模型"
+    ],
+    "title": "System.Threading.Channels 与传统的 BlockingCollection / ConcurrentQueue 相比有什么优势？上位机高频采集的生产-消费模型如何落地？",
+    "summary": "1. **定性**：`Channel<T>` 是 .NET Core 3.0+ 引入的高性能原生异步生产-消费管道，专为 `async/await` 异步生态设计。\n2. **本质区别**：`BlockingCollection<T>` 的消费是基于线程阻塞（`Take()` 占用真实操作系统线程等待）；而 `Channel<T>` 的 `ReadAsync()` 是**纯异步等待，不占用任何线程**，并支持背压控制（Backpressure BoundedChannel）。\n3. **上位机落地**：创建 `Channel.CreateBounded<FrameData>(new BoundedChannelOptions(100) { FullMode = BoundedChannelFullMode.DropOldest })`，传感器极速写入，后台单个 Task 异步拉取并落盘，既绝不阻塞采集，又限制了内存上限。",
+    "detail": "### 1. 核心性能演进对比\n- `ConcurrentQueue<T>`：无等待唤醒通知机制，消费者必须通过 `Thread.Sleep` 轮询或自旋，消耗无谓 CPU，或配合外部 `AutoResetEvent`，代码复杂。\n- `BlockingCollection<T>`：内部封装并发集合与信号量，但其等待只能是同步阻塞线程（Thread Block）。如果有 20 个传感器通道，就需要 20 个物理线程常驻等待，资源浪费。\n- `System.Threading.Channels`：基于值任务 `ValueTask` 优化，分配极少。当管道无数据时，`await reader.WaitToReadAsync()` 挂起状态机释放线程回线程池；数据到来瞬间被调度激活。\n\n### 2. 背压模式（Backpressure）对工控稳定性的决定性意义\n当系统遇到磁盘卡顿或外部压力时，无界队列会导致对象无限堆积最终 `OutOfMemoryException`。`BoundedChannel` 提供四种防爆仓策略：\n- `Wait`：生产者异步等待空间；\n- `DropOldest`：**上位机实时监控最爱**——主动丢弃最旧数据，确保界面始终反映最新的工况；\n- `DropNewest` / `DropWrite`：保护历史数据不受冲击。",
+    "practice": "在步态动力学测控系统中，足底接触传感器以 500Hz 频率上报压力矩阵。采用单生产者单消费者的 `Channel.CreateBounded<SensorPacket>(1000)`，开启 `SingleWriter = true, SingleReader = true` 极致无锁优化模式。采集线程只管往 Channel `TryWrite`，后台单一后台 Task `await foreach` 批量异步写入 SQLite，即使系统突发卡顿也不会丢掉最新关键时序特征。",
+    "follow_ups": [
+      "Q: SingleWriter 和 SingleReader 设置为 true 有什么底层好处？（答：Channel 内部会切换为更加轻量高效的单线程无竞争队列实现，完全省去多线程争用时的锁与 CAS 开销）"
+    ]
+  },
+  {
+    "id": "THR-02",
+    "module": "多线程与高并发",
+    "stars": 5,
+    "tags": [
+      "多线程",
+      "async/await",
+      "状态机",
+      "死锁防范"
+    ],
+    "title": "async / await 底层实现机制是什么？状态机是如何工作的？上位机开发中为什么禁止 async void？",
+    "summary": "1. **底层机制**：编译器在编译阶段将 async 方法改写为一个实现了 `IAsyncStateMachine` 接口的**结构体状态机**，把代码按照 await 拆分为多个断点状态分支（MoveNext）。\n2. **执行流程**：遇到 await 时，先检查 Task 是否已完成；若未完成，调用 `awaiter.UnsafeOnCompleted` 挂载延续任务（Continuation），保存局部变量并立即向调用方返回未完成的 Task；任务完成后由回调触发 `MoveNext` 恢复执行后面的代码。\n3. **禁止 async void 的铁律**：`async void` 方法抛出的异常无法被外部 `try-catch` 捕获，会直接逃逸到 `SynchronizationContext` 导致上位机进程无预警直接崩溃（Crash），且调用方无法对其 `await`，无法跟踪任务生命周期。",
+    "detail": "### 1. 编译器生成的状态机关键逻辑\n```csharp\n// 伪代码示意\nstruct <MyMethodAsync>d__1 : IAsyncStateMachine {\n    public int <>1__state;\n    public AsyncTaskMethodBuilder <>t__builder;\n    private TaskAwaiter <>u__1;\n\n    public void MoveNext() {\n        switch (<>1__state) {\n            case 0: // 恢复状态\n                goto Label_Resume;\n        }\n        // 第一段同步代码\n        var awaiter = DoWorkAsync().GetAwaiter();\n        if (!awaiter.IsCompleted) {\n            <>1__state = 0;\n            <>u__1 = awaiter;\n            // 注册回调，释放当前线程\n            <>t__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);\n            return;\n        }\n    Label_Resume:\n        // 第二段代码\n    }\n}\n```\n\n### 2. 上位机中 async void 的唯一合法场景\n只有在 **WPF 顶层 UI 事件处理器**（如 `private async void BtnStart_Click(object sender, RoutedEventArgs e)`）中允许使用，因为事件签名的委托类型是 `void (object, RoutedEventArgs)`，此时必须在方法内部用完整的 `try-catch` 包裹住所有逻辑，记录错误日志并弹窗提醒，严禁异常漏出！",
+    "practice": "在工业设备运行期间，上位机 7x24 小时无人值守。曾有工程师在设备断线重连后台方法中写了 `private async void ReconnectLoop()`，当现场网线被拔出抛出 `SocketException` 时，由于没有返回 Task 托管，该异常直接打穿全局未捕获异常管道导致整个上位机软件瞬间闪退，酿成生产事故。规范做法：必须返回 `async Task` 并由顶层统筹捕获与重试。",
+    "follow_ups": [
+      "Q: ConfigureAwait(false) 的作用是什么？在上位机何时使用？（答：通知调度器在后续恢复时不强求返回原来的 SynchronizationContext，在编写底层驱动、通信库、算法运算等与 UI 无关的代码时应全部加上，避免不必要地切回 UI 线程造成线程饥饿）"
+    ]
+  },
+  {
+    "id": "THR-03",
+    "module": "多线程与高并发",
+    "stars": 4,
+    "tags": [
+      "多线程",
+      "并发锁",
+      "SemaphoreSlim",
+      "ReaderWriterLockSlim"
+    ],
+    "title": "C# 中 lock、Monitor、SemaphoreSlim、ReaderWriterLockSlim 的底层区别与工控选型场景？",
+    "summary": "1. **lock 与 Monitor**：`lock(obj)` 语法糖底层就是 `Monitor.Enter / Exit`，基于对象头的 SyncBlock 同步块，是**独占且支持重入**的内核/用户混合锁，**只能同步代码，绝对不能在内部 await**。\n2. **SemaphoreSlim**：支持**异步等待**（`await WaitAsync()`）的轻量级信号量，专门用于限制并发访问资源数量（如限制同时只能有 1 个任务操作串口/Socket）。\n3. **ReaderWriterLockSlim**：读写分离锁，允许多个线程并发读，独占写，适合上位机“高频读实时参数，低频写配置”的高并发场景。",
+    "detail": "### 1. 关键差异对比矩阵\n| 锁类型 | 是否支持 await | 是否支持递归重入 | 开销大小 | 核心适用场景 |\n| :--- | :---: | :---: | :---: | :--- |\n| **lock (Monitor)** | ❌ 严禁（会报编译错误） | ✅ 支持 | 小（混合锁，先自旋后阻塞） | 纯内存变量原子修改、同步代码块互斥 |\n| **SemaphoreSlim** | ✅ 原生支持 `WaitAsync` | ❌ 不支持重入 | 较小 | 工业通信端口异步互斥（如串口发包）、异步流限流 |\n| **ReaderWriterLockSlim** | ❌ 严禁 await | ✅ 可配置支持 | 较大 | 多通道并发采集：几百个线程读配置，1个线程写配置 |\n| **Interlocked** | ❌ 硬件原子指令 | N/A | 极小（无锁 CAS） | 计数器统计、帧率累计、标志位无锁切换 |",
+    "practice": "在上位机串口通信层：发送指令是 `async Task<byte[]> SendAsync()` 异步方法，由于内部需要 `await Task.Delay` 等待下位机应答，**绝对不能用 `lock`**，此时必须使用 `private readonly SemaphoreSlim _serialLock = new(1, 1);`，通过 `await _serialLock.WaitAsync(); try { ... } finally { _serialLock.Release(); }` 实现完美的异步串行化互斥。",
+    "follow_ups": [
+      "Q: lock(this) 和 lock(typeof(MyClass)) 为什么是反模式？（答：this 和类型对象都可能被外部代码访问到，如果外部也 lock 了同一个对象，容易引发不可预知的全局死锁，必须使用 private readonly object _locker = new();）"
+    ]
+  },
+  {
+    "id": "CLR-01",
+    "module": "CLR底层与内存优化",
+    "stars": 5,
+    "tags": [
+      "CLR",
+      "GC",
+      "内存泄漏",
+      "7x24小时运行"
+    ],
+    "title": "NET CLR 垃圾回收（GC）的三代回收机制是什么？上位机长期 7x24 小时运行，如何排查和预防内存泄漏？",
+    "summary": "1. **GC 代际假说**：对象存活时间越长越不易死亡。Gen 0（新分配小对象，回收快，几十微秒）、Gen 1（从 Gen 0 幸存下来的缓冲代）、Gen 2（长生命周期对象，回收成本高）。大于 85,000 字节进入大对象堆（LOH），默认只在 Gen 2 完整 GC 时回收且不压缩碎片。\n2. **上位机常见泄漏元凶**：\n   - **未注销的事件监听**（强引用导致短命对象无法被回收）；\n   - **静态字段（Static）持有对象引用**或静态集合只增不减；\n   - **WPF 数据绑定泄漏**（绑定到未实现 INPC 的普通属性，WPF 会用全局反射表持有强引用）；\n   - **未释放非托管句柄**（工业相机 SDK、串口句柄未调用 Dispose/Close）。\n3. **排查利器**：使用 Visual Studio 诊断工具、dotMemory 或 PerfView 抓取内存快照，对比两个时间点的“存活对象增量（Diff）”排查引用链根（GC Root）。",
+    "detail": "### 1. 垃圾回收标记-清除-压缩算法\n1. **标记阶段（Marking）**：从 GC Root（线程栈局部变量、CPU 寄存器、静态变量、终结器队列等）出发，递归遍历所有可达对象，打上存活标记。\n2. **清除与压缩阶段（Plan & Compact）**：未被标记的对象判定为垃圾予以回收。在小对象堆（SOH）中，GC 会移动存活对象紧凑排列以消除内存碎片，并更新所有引用地址。\n3. **GC 停顿对上位机的威胁**：发生全代回收（Gen 2 Full GC）时会触发 Stop-The-World（STW），所有托管线程挂起几十毫秒到数秒，这会导致工业实时通信超时或相机丢帧。\n\n### 2. 内存泄漏根治黄金法则\n- 页面或弹窗关闭时：必须显式在 `Unloaded` 或 `Dispose` 中解绑事件（`-=`），或使用弱事件模式（WeakEventManager）。\n- 频繁创建的大数组（如图像 Buffer）：改用 `ArrayPool<byte>.Shared.Rent(size)` 对象池复用，杜绝频繁冲击 LOH。",
+    "practice": "在科研医疗上位机联调测试中，发现软件连续运行 48 小时后内存从 200MB 缓慢爬升到 3.5GB 最终闪退。使用 dotMemory 进行快照对比发现：主窗口每次切换实验模式重新创建的 UserControl 实例多达上千个未被回收；排查发现是设备底层的全局单例报警服务 `DeviceAlarmService.AlarmTriggered += OnAlarm` 在 UserControl 构造时绑定了，但页面销毁时没有解绑，导致长单例死死抓住了页面树。重构为 Prism 的 `EventAggregator` 弱引用事件后，内存稳定在 220MB 平稳运行数月无异常。",
+    "follow_ups": [
+      "Q: 什么是弱引用（WeakReference）？（答：允许对象被引用的同时，不阻止该对象被 GC 回收；常用于缓存和解耦事件监听）",
+      "Q: GC.Collect() 应该在代码中主动调用吗？（答：常规情况下严禁手动调用，会破坏 GC 自身的代际自我调优模型；仅在极特殊场景如刚关闭了一个占用 1GB 内存的庞大独立分析模块且即将开始实时测控时，才在后台低优先级触发）"
+    ]
+  },
+  {
+    "id": "CLR-02",
+    "module": "CLR底层与内存优化",
+    "stars": 4,
+    "tags": [
+      "CLR",
+      "Span",
+      "Memory",
+      "零拷贝"
+    ],
+    "title": "Span<T> 与 Memory<T> 的底层原理是什么？在工业高频通信数据包解析中如何实现“零拷贝（Zero-Copy）”？",
+    "summary": "1. **定性**：`Span<T>` 是由引用指针与长度构成的 `ref struct`（栈上结构体），能够以统一的方式、类型安全且无需内存拷贝地直接操作托管数组、非托管内存或栈内存连续内存块。\n2. **本质区别**：`Span<T>` 只能存在于线程栈上，不能跨 await、不能作为类字段；`Memory<T>` 是可存放在堆上的通用内存包装器，可以在异步方法（跨 await）中传递，并在需要时通过 `.Span` 快速获取高效切片。\n3. **上位机零拷贝实战**：解析协议时，使用 `span.Slice(offset, length)` 代替传统的 `Array.Copy` 或 `Substring`，切片操作仅需修改指针偏移与长度，时间复杂度 O(1)，0 堆内存分配！",
+    "detail": "### 1. 传统解析的内存开销痛点\n假设接收到一个 1024 字节的 Modbus/TCP 复合报文：\n- 传统做法：通过 `new byte[16]`，然后 `Buffer.BlockCopy` 把包头考出来；再 `new byte[100]` 考出数据段；解析字符串又 `Encoding.ASCII.GetString` 生成临时对象。\n- 结果：每秒处理 500 个包，每秒产生几十万次小内存分配，极速污染 Gen 0 堆，加剧 GC 停顿。\n\n### 2. 基于 Span<T> 的零拷贝重构\n```csharp\nReadOnlySpan<byte> packet = buffer.AsSpan(0, bytesRead);\n// 零拷贝提取包头与有效载荷\nvar header = packet.Slice(0, 4);\nushort length = BinaryPrimitives.ReadUInt16BigEndian(packet.Slice(4, 2));\nvar payload = packet.Slice(6, length);\n// 直接在切片上做 CRC 校验\nushort crc = CalculateCRC(payload);\n```\n全流程没有发生任何一次数组复制和对象 `new`，执行速度提升数倍。",
+    "practice": "在海康相机高速采集（120 FPS）和传感器高速数据流解析模块中：原始数据包到达后直接封装为 `ReadOnlyMemory<byte>`，通过 Channel 异步发给算法分析模块，在分析内部切片解析使用 `ReadOnlySpan<byte>`。结合 `ArrayPool<byte>.Shared`，整个数据链路从采集到落盘做到“全程零内存分配（Zero Allocation）”，GC 暂停时间降至微秒级。",
+    "follow_ups": [
+      "Q: 为什么 ref struct Span<T> 不能被装箱，也不能作为 async 方法的参数？（答：因为 ref struct 必须保证生命周期严格在线程栈上，若装箱到托管堆或被 async 状态机类捕获，指针可能悬空指向失效的栈内存，引发内存安全问题）"
+    ]
+  },
+  {
+    "id": "CLR-03",
+    "module": "CLR底层与内存优化",
+    "stars": 4,
+    "tags": [
+      "CLR",
+      "IDisposable",
+      "Dispose模式",
+      "非托管资源"
+    ],
+    "title": "详细解释 IDisposable 接口与终结器（Finalizer）的标准 Dispose 模式？SafeHandle 的优势是什么？",
+    "summary": "1. **职责分离**：托管资源（由 CLR GC 自动管理回收）；非托管资源（如原生文件句柄、串口句柄、工业相机 Handle、C++ 动态库内存指针等）GC 无法感知大小与释放，必须由程序员显式调用 `Dispose()` 释放。\n2. **标准 Dispose 模式原则**：`Dispose(bool disposing)`，当 `disposing == true` 时释放托管与非托管资源；若用户忘记调用 Dispose，则由垃圾回收器的**析构函数/终结器**在 `disposing == false` 时兜底释放非托管资源。\n3. **SafeHandle**：.NET 提供的封装非托管句柄的安全包装器，能杜绝异步线程终止导致的句柄泄漏，推荐直接使用而无需手写终结器。",
+    "detail": "### 1. 标准模式经典代码骨架\n```csharp\npublic class IndustrialCameraDriver : IDisposable {\n    private IntPtr _nativeCameraHandle; // 非托管句柄\n    private SafeHandle _safeHandle;    // 推荐的现代化句柄封装\n    private bool _disposed = false;\n\n    public void Dispose() {\n        Dispose(true);\n        GC.SuppressFinalize(this); // 核心：通知 GC 无需再将其推入终结器队列，节约性能\n    }\n\n    protected virtual void Dispose(bool disposing) {\n        if (!_disposed) {\n            if (disposing) {\n                // 释放托管资源（如其他 IDisposable 对象）\n            }\n            // 释放非托管资源（如调用 C++ SDK 的 Camera_Close(_nativeCameraHandle)）\n            if (_nativeCameraHandle != IntPtr.Zero) {\n                NativeMethods.CameraClose(_nativeCameraHandle);\n                _nativeCameraHandle = IntPtr.Zero;\n            }\n            _disposed = true;\n        }\n    }\n\n    // 终结器（析构函数）：仅作为用户忘记 Dispose 时的最后兜底防线\n    ~IndustrialCameraDriver() {\n        Dispose(false);\n    }\n}\n```",
+    "practice": "在海康相机 C# SDK 二次开发中：相机的采集流、曝光控制句柄都是基于 C++ 原生动态库分配的系统资源。必须严格实现标准 `IDisposable`，并在系统关闭或相机重连时显式释放；同时在构造 `Dispose` 时执行 `GC.SuppressFinalize(this)`，避免让短命的驱动包装对象流落到高成本的 Finalizer 终结队列中。",
+    "follow_ups": [
+      "Q: 为什么重写了析构函数（~ClassName）的对象会在 GC 时多存活一代？（答：GC 发现带终结器的对象死亡时，不会立刻回收它，而是将其挂入 Finalization Queue，等到下一轮 GC 由专用 Finalizer 线程执行析构后才能真正释放其内存）"
+    ]
+  },
+  {
+    "id": "VIS-01",
+    "module": "工业相机与视觉及底层",
+    "stars": 5,
+    "tags": [
+      "视觉",
+      "海康相机SDK",
+      "高帧率取流",
+      "多线程解耦"
+    ],
+    "title": "工业相机（如海康 SDK）在高帧率采集（如 120 FPS）场景下，如何设计多线程架构以避免内存剧烈抖动与丢帧？",
+    "summary": "1. **三大瓶颈**：高帧率下的回调线程阻塞导致 SDK 驱动底层丢帧、频繁在托管堆分配图像 Buffer 导致频繁 GC、以及 UI 主线程来不及渲染导致消息队列雪崩。\n2. **三级解耦架构**：\n   - **第一级（硬件采集）**：使用 SDK 的回调函数或原生独立后台轮询线程（`MV_CC_GetOneFrameTimeout`），仅负责将裸图像指针数据快速推入预分配的环形无锁缓冲队列（RingBuffer），耗时控制在 1ms 内。\n   - **第二级（算法处理与录像落盘）**：后台专用计算 Task 从队列取出图像，直接在指针或共享内存上调用 OpenCvSharp 做算法分析，并异步送入视频压缩编码器（如 FFmpeg/OpenCV VideoWriter）。\n   - **第三级（UI 预览）**：采用 `WriteableBitmap` 结合定时器以 30 FPS 降频抽帧渲染，彻底与 120 FPS 物理采集脱钩。",
+    "detail": "### 1. 内存池技术防抖动\n严禁在相机每帧到来时 `new byte[width * height * 3]`！在 120 FPS 下，1080P RGB 图像每秒产生近 1GB 内存垃圾。工程解决方案：\n- 初始化时申请固定容量的内存池（例如循环复用 10 个固定数组缓冲区）。\n- 相机数据直接 `Buffer.BlockCopy` 或 `Marshal.Copy` 写入租借的缓冲区中，处理完毕后归还池中，全程零托管内存分配。",
+    "practice": "在智能步态动力学测控系统中，搭载 3 路高速工业相机同步 120 FPS 采集。早期版本在相机回调里直接转 Bitmap 赋给 WPF 界面，导致 CPU 占用率 90% 且每 10 秒丢 5 帧。重构后：独立封装海康 SDK 采集管线，后台线程通过固定预分配内存缓冲队列接流，录像落盘走异步后台线程写入 NVMe SSD，WPF 端基于 WriteableBitmap 做 30Hz 抽帧同步预览，最终实现连续 3 小时录制 0 丢帧，CPU 占用稳定在 20% 以下。",
+    "follow_ups": [
+      "Q: 软触发（Software Trigger）与硬外触发（Hardware External Trigger）有何区别？（答：软触发通过上位机下发指令，受网络与系统调度延迟影响有几毫秒抖动；硬触发通过传感器光电信号接相机 GPIO 引脚，纳秒/微秒级响应，多相机高精度同步必须使用硬外触发）"
+    ]
+  },
+  {
+    "id": "VIS-02",
+    "module": "工业相机与视觉及底层",
+    "stars": 4,
+    "tags": [
+      "底层",
+      "P/Invoke",
+      "C++交互",
+      "结构体封送与内存对齐"
+    ],
+    "title": "C# P/Invoke 调用 C/C++ 原生动态库（DLL）时，结构体对齐（Pack）、指针传递（IntPtr）与字符串封送的核心规则是什么？",
+    "summary": "1. **定性**：P/Invoke（Platform Invoke）是 CLR 提供的跨语言互操作机制，通过 Marshaler（封送拆构器）在托管世界与非托管世界之间转换数据类型。\n2. **结构体传递黄金法则**：必须打上 `[StructLayout(LayoutKind.Sequential, Pack = 1 或 4)]` 特性，保证字段在内存中的偏移与 C/C++ 结构体严格字节对齐，否则字段错位读取必错。\n3. **指针与内存管理铁律**：\n   - 传递数组或大块内存时使用 `IntPtr`；\n   - 若在托管代码中将托管数组地址传给 C++ 长时间使用，必须使用 `GCHandle.Alloc(array, GCHandleType.Pinned)` 固定内存钉住（Pin），防止 GC 在压缩内存时搬动该对象导致 C++ 产生野指针崩溃！",
+    "detail": "### 1. 结构体封送对齐典型示范\n```csharp\n// C++ 结构体\n// struct DevConfig { int id; char code[16]; double threshold; };\n\n[StructLayout(LayoutKind.Sequential, Pack = 1, CharSet = CharSet.Ansi)]\npublic struct DevConfig {\n    public int Id;\n    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 16)]\n    public string Code;\n    public double Threshold;\n}\n```\n\n### 2. 回调函数互操作注意事项\n如果将 C# 委托传给 C++ 作为事件回调函数：\n- 必须在 C# 侧使用类成员字段持有该委托实例的强引用！\n- 否则委托容易被 GC 当作无人引用的垃圾悄悄回收，导致 C++ 稍后调用该函数指针时抛出著名的 `ExecutionEngineException` 导致程序硬崩溃。",
+    "practice": "在上位机与硬件加密狗及工业算法 C++ DLL 交互中：通过 `[DllImport(\"HardwareDog.dll\", CallingConvention = CallingConvention.Cdecl)]` 调用原生接口。严格指定结构体 `Pack = 1` 并在数据传输完毕后显式通过 `Marshal.FreeHGlobal` 释放申请的非托管内存，杜绝了底层句柄与内存泄露风险。",
+    "follow_ups": [
+      "Q: CallingConvention.Cdecl 与 StdCall 有什么区别？（答：Cdecl 由调用者清理栈，支持可变参数，C/C++默认；StdCall 由被调用者清理栈，Windows API常用，若约定不匹配会导致调用堆栈不平衡崩溃）"
+    ]
+  },
+  {
+    "id": "VIS-03",
+    "module": "工业相机与视觉及底层",
+    "stars": 4,
+    "tags": [
+      "视觉",
+      "OpenCvSharp",
+      "Mat转换",
+      "内存泄漏"
+    ],
+    "title": "OpenCvSharp 图像处理（如 HSV 分割、连通域分析）中，如何高效将 Mat 转为 WPF 界面显示而不发生内存泄漏？",
+    "summary": "1. **Mat 的本质**：`OpenCvSharp.Mat` 内部持有的是 C++ 堆上的原生非托管图像矩阵指针，**不受 C# GC 自动回收控制**，必须在使用完毕后显式调用 `mat.Dispose()`，否则分分钟造成非托管内存暴涨。\n2. **转换效率陷阱**：严禁使用 `mat.ToBitmapSource()` 传统方式频繁创建新的图像源，该方法内部会重新申请内存并深拷贝，高频下直接触发卡顿。\n3. **极致性能方案**：通过预先分配的 `WriteableBitmap`，直接获取其 `BackBuffer` 指针，使用 OpenCV 的 `mat.CopyTo` 或 `Buffer.MemoryCopy` 拷贝进显存脏区，或者使用 `OpenCvSharp.WpfExtensions` 的高效写入接口。",
+    "detail": "### 1. 典型的 Mat 内存泄漏诱发\n```csharp\n// 错误示范：在高频循坏中链式调用未释放中间临时 Mat\nvar result = srcMat.CvtColor(ColorConversionCodes.BGR2HSV)\n                   .InRange(lower, upper) // 这里产生的临时 Mat 永远没被释放！\n                   .FindContours(...);\n```\n规范写法：中间产物必须用 `using var hsv = new Mat();` 或显式复用预先分配好的全局 Mat。\n\n### 2. 高效转 WriteableBitmap 代码\n```csharp\npublic void UpdateWpfImage(Mat mat, WriteableBitmap wpfBmp) {\n    wpfBmp.Lock();\n    // 确保分辨率和通道匹配（如 Bgr24）\n    unsafe {\n        Buffer.MemoryCopy(mat.DataPointer, wpfBmp.BackBuffer.ToPointer(), \n                          mat.Total() * mat.ElemSize(), mat.Total() * mat.ElemSize());\n    }\n    wpfBmp.AddDirtyRect(new Int32Rect(0, 0, mat.Width, mat.Height));\n    wpfBmp.Unlock();\n}\n```",
+    "practice": "在小动物步态接触面分析中：采集到的侧视与底视灰度图像经 HSV 动态分割和形态学闭运算提取足底轮廓。通过复用两个全局工作 `Mat` 缓冲区进行连通域分析（`ConnectedComponentsWithStats`），消除了中间临时对象的反复分配，足印实时跟踪分析耗时稳定在 4ms 以内，满足 120 FPS 准实时分析要求。",
+    "follow_ups": [
+      "Q: OpenCvSharp 中的 using 语句块在循环中大量出现会导致性能变慢吗？（答：不会，using 编译后是 try-finally 调用 Dispose()，只是调用原生 cvReleaseImage 清理指针，比等待 GC 回收高效得多）"
+    ]
+  },
+  {
+    "id": "CS-01",
+    "module": "C#与.NET8核心基础",
+    "stars": 4,
+    "tags": [
+      "语言基础",
+      "struct与class",
+      "值类型与引用类型",
+      "装箱拆箱"
+    ],
+    "title": "深度剖析 struct 与 class 的内存分配、装箱拆箱机制与性能差异，为什么工控数据包往往定义为结构体？",
+    "summary": "1. **内存定位**：`struct` 是值类型（分配在线程栈或包含它的父对象堆上），赋值为完整深拷贝；`class` 是引用类型（对象分配在托管堆，栈上仅保存 4/8 字节地址指针），赋值仅复制引用。\n2. **装箱与拆箱开销**：当将 `struct` 赋值给 `object` 或接口时发生装箱（在堆上分配新内存并把值拷进去），逆过程为拆箱。高频装箱会严重污染托管堆并触发 GC。\n3. **工控青睐 struct 的原因**：工控通信帧（如传感器坐标、Modbus 报文）数据量小（通常几十字节），定义为 `readonly struct` 或 `ref struct` 可实现**零 GC 垃圾分配、极高的 CPU 缓存局部性（Cache Locality）**，且内存布局连续，方便与硬件紧凑对齐。",
+    "detail": "### 1. 结构体与类对比全貌\n- 继承：结构体隐式继承自 `System.ValueType`，不能继承类或结构体，但可实现接口；类支持单继承。\n- 构造函数：C# 10 之前结构体不支持无参构造，C# 10+ 支持；结构体不可有析构函数。\n- 传递语义：方法传参时结构体按值拷贝（若结构体超过 16 字节拷贝开销较大，应搭配 `in` 或 `ref` 关键字实现只读引用传递避免拷贝）。",
+    "practice": "在步态测控系统的传感器数据管道中，定义了传感器时序数据：\n```csharp\n[StructLayout(LayoutKind.Sequential, Pack = 1)]\npublic readonly struct SensorDataPacket {\n    public readonly long Timestamp;\n    public readonly float ForceX;\n    public readonly float ForceY;\n    public readonly float ForceZ;\n}\n```\n该结构体每秒产生 1000 个实例，通过只读传递直接流转，全生命周期 0 次堆内存分配，完全不给 GC 增加任何负担。",
+    "follow_ups": [
+      "Q: 什么是 readonly struct？有何优化效果？（答：告知编译器其所有字段均不可变，当使用 in 关键字传参时，编译器无需为其创建防御性副本 Defensive Copy，显著提升只读传递性能）"
+    ]
+  },
+  {
+    "id": "CS-02",
+    "module": "C#与.NET8核心基础",
+    "stars": 4,
+    "tags": [
+      "语言基础",
+      "委托与事件",
+      "弱事件模式",
+      "MulticastDelegate"
+    ],
+    "title": "C# 中委托（Delegate）与事件（Event）的底层区别？为什么不能直接暴露公共委托？弱事件模式解决什么痛点？",
+    "summary": "1. **底层机制**：委托本质是一个类，继承自 `MulticastDelegate`，内部维护目标对象 `_target` 和方法指针 `_methodPtr` 以及调用链列表；事件是基于委托封装的**受保护机制**，在底层自动生成私有委托字段和 `add / remove` 访问器。\n2. **为什么不直接用 public 委托**：若使用 `public Action OnDataReceived`，外部外部代码可以直接执行 `OnDataReceived = null;` 粗暴清空所有其他模块的订阅，或在外部随意越权调用 `OnDataReceived()`；而 `event` 关键字限制外部**只能使用 `+=` 和 `-=`**，只能由所属类自身内部触发广播，保障封装安全性。\n3. **弱事件模式**：发布者持有订阅者的强引用常导致内存泄漏，弱事件通过弱引用管理订阅列表，解耦生命周期。",
+    "detail": "### 1. 编译后的代码真相\n当你写：\n```csharp\npublic event Action<int> DataChanged;\n```\nC# 编译器会自动生成如下逻辑：\n```csharp\nprivate Action<int> DataChanged; // 私有委托\npublic void add_DataChanged(Action<int> value) { ... } // 线程安全的 Delegate.Combine\npublic void remove_DataChanged(Action<int> value) { ... } // 线程安全的 Delegate.Remove\n```\n外部完全无法做赋值操作，彻底防止非法篡改。",
+    "practice": "在工控设备驱动开发中：设备状态变更、报警事件均严格声明为 `public event EventHandler<AlarmArgs> DeviceAlarmed`，外部业务模块只能挂载监听，不能从外部伪造触发报警。对于需要频繁开闭的临时诊断浮窗，使用 `WeakEventManager<TSource, TEventArgs>.AddHandler` 订阅设备单例事件，彻底免除弹窗忘记注销导致的内存泄漏隐患。",
+    "follow_ups": [
+      "Q: 委托调用的执行顺序是怎样的？如果链条中一个方法抛出异常会怎样？（答：按订阅顺序同步依次执行；若其中一个抛出异常且未被内部捕获，调用链会中断，后续方法将不会被执行；若需保证全部执行，需通过 GetInvocationList() 遍历并独立 try-catch 调用）"
+    ]
+  },
+  {
+    "id": "CS-03",
+    "module": "C#与.NET8核心基础",
+    "stars": 3,
+    "tags": [
+      "语言基础",
+      "string",
+      "不可变性",
+      "StringBuilder"
+    ],
+    "title": "string 的不可变性（Immutability）与字符串驻留池（String Interning）原理？上位机日志拼接为何必须用 StringBuilder？",
+    "summary": "1. **不可变性**：`string` 一旦在托管堆上创建，其包含的字符内容不可修改；任何修改（如 `+`、`Replace`）都会在堆上分配一个全新的 string 对象并复制内容。\n2. **驻留池**：CLR 维护了一个全局哈希表，编译期字面量相同的字符串在进程内只保留一份单例引用以节约内存。\n3. **日志与数据拼接**：若在串口或高频循环中使用 `str += newStr`，每次拼接都会复制旧内容并申请新堆空间，造成海量碎片和 GC 压力；`StringBuilder` 内部维护字符数组缓冲区（默认动态倍增容量），仅在容量不足时扩容，实现 O(1) 均摊追加。",
+    "detail": "### 1. 性能对比\n在拼接 10,000 次字符串场景下：\n- `string +=`：产生 10,000 个堆对象，涉及海量内存复制，耗时数百毫秒并触发多次 Gen 0 GC。\n- `StringBuilder`：仅扩容十几次，耗时不到 1 毫秒，内存占用极小。\n- 在 C# 6+ 字符串内插（`$\"ID: {id}\"`）中：如果是单行少数字符串，编译器优化为 `string.Format`，简单易读；若是循环拼接必须使用 `StringBuilder`。",
+    "practice": "上位机调试串口与工业总线数据监听窗口：当下位机高频打印 Hex 报文时，如果用 `textBox.Text += hexStr` 会瞬间卡死界面。标准架构：后台用 `StringBuilder` 维护最新环形日志缓冲区，配合定时器或限频刷新器一次性批量赋值更新，保证流畅度。",
+    "follow_ups": [
+      "Q: string.Intern() 和 string.IsInterned() 的作用？（答：手动将运行时动态生成的字符串放入驻留池或查询是否存在，用于海量重复字典字符串的去重优化）"
+    ]
+  },
+  {
+    "id": "CLASSIC-01",
+    "module": "经典题与历史归档",
+    "stars": 4,
+    "tags": [
+      "操作系统",
+      "多线程",
+      "死锁",
+      "四大必要条件"
+    ],
+    "title": "操作系统中死锁产生的四个必要条件是什么？上位机多线程编程中如何有效预防与克服死锁？",
+    "summary": "1. **死锁四大必要条件**：互斥条件、请求与保持条件、不剥夺条件、循环等待（环路等待）条件。\n2. **核心破坏手段**：破坏“循环等待”最为有效——在代码中**严格固定锁的获取顺序**（例如总是先锁 A，再锁 B）；或者破坏“请求与保持”——使用带有超时的锁尝试（如 `Monitor.TryEnter(obj, timeout)` 或 `SemaphoreSlim.WaitAsync(timeout)`），超时未获取立即释放已持有的锁并回退重试。\n3. **规避 UI 死锁**：禁止在 UI 主线程对异步 Task 调用 `.Result` 或 `.Wait()` 同步阻塞。",
+    "detail": "### 1. 经典死锁代码模拟\n线程 1 持有 LockA 试图获取 LockB；线程 2 持有 LockB 试图获取 LockA。两线程永久僵持。\n\n### 2. 工控上位机死锁预防规范\n1. **全局锁顺序规范**：如果涉及多个设备（如串口端口锁与电机状态锁），所有业务模块必须按照固定的全局等级制度依次加锁。\n2. **采用超时重试机制**：使用 `await sema.WaitAsync(TimeSpan.FromSeconds(2))`，若超时抛出日志告警并释放资源，而不是无限挂起导致整机卡死。\n3. **最小化锁范围**：不要在锁块内执行耗时的 I/O 操作、文件写入或调用不受控的外部回调。",
+    "practice": "在多轴运动控制联动中，X 轴与 Y 轴拥有各自的硬件互斥锁。为防止插补计算与原点回归两组并发线程出现反向死锁，规定所有跨轴联动操作必须按“X轴 -> Y轴 -> Z轴”的字母表固定顺序申请资源，从数学逻辑上彻底斩断了形成环路等待的可能性。",
+    "follow_ups": [
+      "Q: 银行家算法的基本原理是什么？（答：一种避免死锁的动态资源分配算法，在分配前试探分配后系统是否依然处于安全状态，若是才真正分配，否则让进程等待）"
+    ]
+  },
+  {
+    "id": "CLASSIC-02",
+    "module": "经典题与历史归档",
+    "stars": 3,
+    "tags": [
+      "操作系统",
+      "进程与线程",
+      "内存模型"
+    ],
+    "title": "进程（Process）与线程（Thread）的本质区别是什么？在 Windows 上位机环境下如何权衡？",
+    "summary": "1. **资源与调度**：进程是**操作系统资源分配的独立基本单位**（拥有独立的虚拟地址空间、句柄表、安全上下文）；线程是**CPU 调度与执行的基本单位**，同一进程内的所有线程共享该进程的地址空间和全局资源。\n2. **开销差异**：进程创建和上下文切换开销大，崩溃时相互隔离互不影响；线程创建与切换轻量（通常只占用约 1MB 栈空间），但同一进程内某个线程如果发生访问违规（如 AccessViolationException）可能直接导致整个进程崩溃。\n3. **上位机选型**：常规测控系统采用单进程多线程模型（高效通信与低延迟共享内存）；对于稳定性要求极高的高危硬件（如不稳定易崩溃的第三方驱动），通常采用**独立看门狗进程或跨进程架构**进行物理隔离保护。",
+    "detail": "### 1. 深入对比\n- **内存隔离**：进程间通信（IPC）必须通过命名管道（NamedPipe）、共享内存（MemoryMappedFile）或 Socket；线程间通信只需直接读写共享内存变量（需注意线程同步安全）。\n- **异常隔离**：托管环境下的普通异常可用 try-catch 拦截，但如果是 C++ 原生 DLL 导致的硬崩溃，线程级崩溃会拖垮整个宿主上位机。",
+    "practice": "在上位机系统中，主程序负责测控与 UI 显示；针对某老旧分析仪不稳定的第三方驱动，单独编写了一个无界面的 Console 辅助进程进行托管，二者通过命名管道进行高速二进制通信。即使第三方驱动偶发崩溃，主上位机不仅不会闪退，还能自动检测并拉起重启该辅助进程，实现了工业级的容灾弹性。",
+    "follow_ups": [
+      "Q: 什么是纤程（Fiber）与协程？C# 的 async/await 和线程是什么关系？（答：async/await 是语言级协程/用户态调度，并不等同于创建新线程，是在少量线程池线程之间复用 CPU）"
+    ]
+  },
+  {
+    "id": "CLASSIC-03",
+    "module": "经典题与历史归档",
+    "stars": 3,
+    "tags": [
+      "面向对象",
+      "重载与重写",
+      "虚方法",
+      "多态"
+    ],
+    "title": "方法重载（Overload）与方法重写（Override）的深层区别？C# new 隐藏父类方法的区别与危害？",
+    "summary": "1. **重载（Overload）**：编译期多态（早绑定），在同一类中，方法名相同但参数列表（个数、类型、顺序）不同，调用哪个版本在编译阶段即由静态类型确定。\n2. **重写（Override）**：运行时多态（晚绑定），子类重写基类带 `virtual` 或 `abstract` 的方法，方法签名必须完全一致，通过对象的**虚方法表（vtable）**动态分派实际执行逻辑。\n3. **new 隐藏的危害**：`new` 仅仅是隐藏基类方法（断开了虚方法分派链），若将子类实例赋值给基类变量，调用时执行的将是基类的旧逻辑而非子类的新逻辑，容易产生隐蔽的逻辑 Bug，上位机中应尽量避免，优先规范使用 `override`。",
+    "detail": "### 1. 虚方法表（vtable）底层分派过程\n- 每个包含虚方法的类在被加载时，CLR 会为其生成一个方法表（Method Table）。\n- 类的每个对象实例头包含一个指向该方法表指针（TypeHandle）。\n- 当执行 `baseRef.DoAction()` 时，CLR 先查对象头找到真实运行时类型的 Method Table，再按槽位偏移调用对应地址，因此无论变量声明是什么类型，执行的都是当前真实实例的派生方法。\n\n### 2. 代码对比展示\n```csharp\nclass Base { public virtual void Run() => Console.Write(\"Base\"); }\nclass SubOverride : Base { public override void Run() => Console.Write(\"SubO\"); }\nclass SubNew : Base { public new void Run() => Console.Write(\"SubN\"); }\n\nBase b1 = new SubOverride(); b1.Run(); // 输出 SubO (多态生效)\nBase b2 = new SubNew();      b2.Run(); // 输出 Base (多态失效！容易踩坑)\n```",
+    "practice": "在硬件抽象层（HAL）设计中，定义了抽象基类 `DeviceControllerBase`，声明虚方法 `public virtual async Task InitializeAsync()`。不同硬件子类（如 `SerialMotorController` 和 `TcpMotorController`）统一使用 `override` 重写。上层业务以基类指针统一调度启动流程，完美发挥多态优势。",
+    "follow_ups": [
+      "Q: 抽象类（abstract）和接口（interface）在多态设计上如何选择？（答：IS-A 强血缘关系且需共享部分通用实现时用抽象类；CAN-DO 能力契约或多实现多重继承时用接口）"
+    ]
+  },
+  {
+    "id": "CLASSIC-04",
+    "module": "经典题与历史归档",
+    "stars": 3,
+    "tags": [
+      "网络通信",
+      "TCP与UDP",
+      "三次握手",
+      "工业应用选型"
+    ],
+    "title": "TCP 与 UDP 协议的核心区别？工业测控场景下视频流、控制指令与传感器数据应如何选型？",
+    "summary": "1. **协议特性**：TCP 是面向连接、可靠、基于字节流的双向通信协议（有三次握手、确认重传、拥塞控制和滑动窗口）；UDP 是无连接、不可靠、面向数据报的轻量传输协议（无连接状态，尽最大努力交付）。\n2. **工业选型策略**：\n   - **控制指令与参数配置**：必须选 **TCP**（或基于 TCP 的 Modbus-TCP / OPC UA），控制电机启停、调速绝对不允许丢包或乱序。\n   - **高帧率工业相机裸流 / 实时视频**：优先选 **UDP**（如工业千兆网相机标准 GigE Vision 基于 UDP 广播），即使偶发丢弃一个像素包也不可触发全局阻塞，保证画面低延迟。\n   - **高频传感器瞬态波形**：若数据量极大且注重实时性可采用 UDP，并在应用层做序号去重与校验。",
+    "detail": "### 1. 核心对比表\n| 特性 | TCP | UDP |\n| :--- | :--- | :--- |\n| **连接性** | 面向连接（三次握手建立，四次挥手断开） | 无连接（直接发包） |\n| **可靠性** | 极高（超时重传、丢包重发、顺序保证） | 不保证送达，不保证顺序 |\n| **传输方式** | 流式传输（Stream），存在粘包现象 | 报文传输（Datagram），保留完整边界 |\n| **头部开销** | 至少 20 字节，状态机复杂 | 仅 8 字节，极简高速 |\n| **传输延迟** | 遇丢包会等待重传（队头阻塞 Head-of-Line Blocking） | 延迟极低且平稳，无等待 |",
+    "practice": "在 3 路工业相机测控系统中，千兆网相机取流底层基于 GigE Vision 协议（基于 UDP 构建），即使网络偶发闪烁也保证 120 FPS 采集不发生队头阻塞；而向 PLC 下发跑台速度设定值与安全互锁信号时，严格采用 TCP 上的 Modbus-TCP 协议，确保每一条关键指令都被确认识别。",
+    "follow_ups": [
+      "Q: TCP 粘包问题在 UDP 中存在吗？（答：不存在！UDP 是面向报文的，操作系统会完整保留发送端的数据边界，每次 recvfrom 读到的就是一整个完整的数据报）"
+    ]
+  }
+];
