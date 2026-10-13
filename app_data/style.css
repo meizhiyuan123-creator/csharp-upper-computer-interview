@@ -810,3 +810,492 @@ body {
   }
 }
 
+/* ==========================================================
+   AI 智能助手悬浮窗与问答流样式 (DeepSeek BYOK)
+   ========================================================== */
+
+/* 悬浮 FAB 按钮 */
+.ai-fab-btn {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 1000;
+  background: linear-gradient(135deg, #0070f3, #7928ca);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 30px;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 112, 243, 0.4), 0 0 12px rgba(121, 40, 202, 0.3);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(10px);
+}
+
+.ai-fab-btn:hover {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow: 0 12px 32px rgba(0, 112, 243, 0.5), 0 0 20px rgba(0, 242, 254, 0.4);
+}
+
+.ai-fab-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.ai-fab-icon {
+  font-size: 18px;
+}
+
+/* AI 对话面板容器 (桌面端浮动卡片 / 移动端全屏抽屉) */
+.ai-drawer {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  height: 640px;
+  max-height: calc(100vh - 80px);
+  background: var(--bg-card);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 112, 243, 0.15);
+  display: flex;
+  flex-direction: column;
+  z-index: 1001;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(20px) scale(0.96);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ai-drawer.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+/* 抽屉头部 */
+.ai-drawer-header {
+  padding: 14px 18px;
+  background: rgba(18, 23, 34, 0.85);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ai-drawer-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 10px var(--accent-cyan);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 242, 254, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(0, 242, 254, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 242, 254, 0); }
+}
+
+.ai-drawer-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ai-drawer-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.ai-drawer-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ai-icon-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 13px;
+  transition: var(--transition);
+}
+
+.ai-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+}
+
+/* 配置卡片面板 */
+.ai-config-panel {
+  background: rgba(10, 13, 20, 0.95);
+  border-bottom: 1px solid var(--border-color);
+  padding: 14px 18px;
+  display: none;
+  flex-direction: column;
+  animation: fadeIn 0.2s ease;
+}
+
+.ai-config-panel.open {
+  display: flex;
+}
+
+.ai-config-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-config-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.ai-config-input, .ai-config-select {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 6px 10px;
+  font-size: 12px;
+  outline: none;
+  transition: var(--transition);
+}
+
+.ai-config-input:focus, .ai-config-select:focus {
+  border-color: var(--accent-blue);
+}
+
+.ai-config-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.ai-config-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ai-save-btn {
+  background: var(--accent-blue);
+  color: #fff;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.ai-save-btn:hover {
+  background: #005bb5;
+}
+
+/* 消息流展示区 */
+.ai-chat-stream {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(10, 13, 20, 0.4);
+}
+
+.ai-msg {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  max-width: 90%;
+  animation: fadeIn 0.2s ease;
+}
+
+.ai-msg-bot {
+  align-self: flex-start;
+}
+
+.ai-msg-user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.ai-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(0, 112, 243, 0.15);
+  border: 1px solid rgba(0, 112, 243, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.ai-msg-user .ai-avatar {
+  background: rgba(121, 40, 202, 0.2);
+  border-color: rgba(121, 40, 202, 0.4);
+}
+
+.ai-bubble {
+  background: rgba(22, 28, 42, 0.85);
+  border: 1px solid var(--border-color);
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.ai-msg-user .ai-bubble {
+  background: linear-gradient(135deg, rgba(0, 112, 243, 0.3), rgba(121, 40, 202, 0.25));
+  border-color: rgba(0, 112, 243, 0.4);
+  color: #fff;
+}
+
+.ai-bubble pre {
+  background: #0d1117;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  overflow-x: auto;
+  font-family: SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+
+.ai-bubble code {
+  font-family: SFMono-Regular, Consolas, monospace;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #58a6ff;
+}
+
+.ai-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 14px;
+  background: var(--accent-cyan);
+  margin-left: 4px;
+  vertical-align: middle;
+  animation: blink 0.8s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* 快捷提示词标签 */
+.ai-quick-tags {
+  padding: 8px 14px;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  white-space: nowrap;
+  background: rgba(18, 23, 34, 0.6);
+  border-top: 1px solid var(--border-color);
+  scrollbar-width: none;
+}
+
+.ai-quick-tags::-webkit-scrollbar {
+  display: none;
+}
+
+.ai-quick-tag {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.ai-quick-tag:hover {
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  border-color: var(--tag-text);
+}
+
+/* 底部输入栏 */
+.ai-input-bar {
+  padding: 12px 14px;
+  background: rgba(18, 23, 34, 0.95);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.ai-textarea {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.4;
+  resize: none;
+  outline: none;
+  font-family: inherit;
+  transition: var(--transition);
+}
+
+.ai-textarea:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.2);
+}
+
+.ai-send-btn {
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: var(--transition);
+  height: 36px;
+}
+
+.ai-send-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.ai-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 卡片底部的 [🤖 AI 追问] 快捷按钮 */
+.ask-ai-card-btn {
+  background: rgba(121, 40, 202, 0.12);
+  border: 1px solid rgba(121, 40, 202, 0.35);
+  color: #d2a8ff;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: var(--transition);
+}
+
+.ask-ai-card-btn:hover {
+  background: rgba(121, 40, 202, 0.25);
+  border-color: #d2a8ff;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* 移动端全屏抽屉适配 */
+@media (max-width: 640px) {
+  .ai-fab-btn {
+    bottom: 20px;
+    right: 18px;
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .ai-drawer {
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: 85vh;
+    max-height: 85vh;
+    border-radius: 18px 18px 0 0;
+    transform: translateY(100%);
+  }
+
+  .ai-drawer.open {
+    transform: translateY(0);
+  }
+}
+
+/* AI 回复中的代码块与复制按钮 */
+.ai-code-wrapper {
+  margin: 10px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #0d1117;
+}
+
+.ai-code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+
+.ai-copy-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.ai-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-color: var(--accent-cyan);
+}
+
+.ai-code-wrapper pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  background: transparent;
+}
+
+

@@ -193,6 +193,10 @@
               <span id="btn-text-${q.id}">${isVisible ? '🙈 收起解答' : '👁️ 查看解答 / 自测'}</span>
             </button>
 
+            <button class="ask-ai-card-btn" onclick="window.askAiWithQuestion('${q.id}')" title="唤起 AI 对本题进行深入追问与实战拓展">
+              🤖 AI 追问
+            </button>
+
             <div class="status-actions">
               <button class="status-btn btn-mastered ${status === 'mastered' ? 'active' : ''}" 
                       onclick="window.setCardStatus('${q.id}', 'mastered')" title="标记为熟练掌握">
@@ -312,7 +316,375 @@
     setTheme(cur === 'light' ? 'dark' : 'light');
   });
 
-  // 15. 初始化运行
+  // ==========================================================
+  // 15. DeepSeek 上位机技术与面试 AI 智能辅导模块
+  // ==========================================================
+  const STORAGE_KEY_AI_KEY = 'csharp_ai_api_key';
+  const STORAGE_KEY_AI_ENDPOINT = 'csharp_ai_api_endpoint';
+  const STORAGE_KEY_AI_MODEL = 'csharp_ai_model';
+
+  // 资深上位机面试导师与架构专家系统提示词
+  const SYSTEM_PROMPT = `你是一位拥有10年以上工业工控与智能制造研发经验的【资深 C# / .NET 上位机架构专家与资深工控大厂面试导师】。
+你的核心任务是：全面解答上位机软件工程师的求职面试题、梳理面试高分技巧、深度排查工业现场技术疑难、提供架构选型与高鲁棒性代码方案。用户可能会针对知识库中的某道题目深度追问，也可能会随时进行任意工业技术/工控难题的自由提问。
+
+【你的核心专业领域与工业知识图谱】
+1. 语言与运行时底层：精通 C# 8-12 现代语法、.NET 8 / .NET Framework 运行时底层架构、CLR 内存模型、GC 分代回收与大对象堆（LOH）碎片治理、Span<T>/Memory<T> 零拷贝高吞吐处理、dotMemory / PerfView / WinDbg 内存泄漏与高 CPU 根因排查。
+2. 桌面 GUI 与测控前端：深度掌握 WPF 与 WinForms 架构机制、Prism / CommunityToolkit.Mvvm 解耦设计、依赖属性、路由事件、Dispatcher 线程调度与死锁防范、UI 虚拟化、海量工业波形与点位毫秒级刷新（WriteableBitmap、SkiaSharp、OxyPlot）。
+3. 工业通信与硬件总线：精通 Modbus (RTU/TCP/ASCII)、主流 PLC 驱动（西门子 S7.Net/Snap7、三菱 MC/SLMP、欧姆龙 FINS、倍福 ADS）、OPC UA / DA、CANopen、EtherCAT；深入掌握串口 SerialPort 底层防丢包重连、分包粘包协议解析（状态机 / 环形缓冲区 RingBuffer / Pipelines）、SocketAsyncEventArgs 高并发网络通信。
+4. 工业多线程与实时并发：精通 Task / async-await 底层状态机、Channel<T>、BlockingCollection、无锁队列（ConcurrentQueue）、高精度工业级多媒体定时器（timeSetEvent / MMTimer / Stopwatch 轮询）、多线程同步锁（Monitor、SemaphoreSlim、Mutex、ReaderWriterLockSlim）。
+5. 工业视觉与运动控制集成：海康 / 大华 / Basler 工业相机 SDK 取流与图像内存生命周期管理、OpenCV / Halcon 图像处理管道与 C++ 跨语言 P/Invoke、运动控制卡（固高、雷赛、正运动）多轴联动插补与原点复归、各类工业传感器（扫码枪、温控表、电子秤）协议集成。
+
+【回答风格与规范】
+1. 直击要害：先用 1-2 句精炼结论定性技术本质，拒绝冗长套话；
+2. 工业实战优先：所有分析紧扣真实工厂产线、工控机、7x24 稳定运行等真实痛点（如高频丢包、UI冻结、死锁、内存踩踏、断线重连震荡等）；
+3. 代码地道健壮：提供的 C# 代码遵循现代规范，注重异常捕获、资源释放（IDisposable / using）、CancellationToken 协同超时控制；
+4. 面试场景赋能：若是面试相关提问，主动拆解“面试官的核心考点与期望回答”、“避坑要点”及“能让面试官眼前一亮的架构级加分答法”。`;
+
+  // AI 交互 DOM
+  const elAiFabBtn = document.getElementById('aiFabBtn');
+  const elAiDrawer = document.getElementById('aiDrawer');
+  const elAiCloseBtn = document.getElementById('aiCloseBtn');
+  const elAiConfigToggleBtn = document.getElementById('aiConfigToggleBtn');
+  const elAiClearHistoryBtn = document.getElementById('aiClearHistoryBtn');
+  const elAiConfigPanel = document.getElementById('aiConfigPanel');
+  const elAiApiKeyInput = document.getElementById('aiApiKeyInput');
+  const elAiApiEndpointInput = document.getElementById('aiApiEndpointInput');
+  const elAiModelSelect = document.getElementById('aiModelSelect');
+  const elAiSaveConfigBtn = document.getElementById('aiSaveConfigBtn');
+  const elAiChatStream = document.getElementById('aiChatStream');
+  const elAiUserInput = document.getElementById('aiUserInput');
+  const elAiSendBtn = document.getElementById('aiSendBtn');
+
+  // 本地会话消息历史 (保存当前会话的上下文，最多保留最近 12 条避免超 token)
+  let chatHistory = [];
+  let isAiGenerating = false;
+
+  // 读取已保存的 API 配置
+  function loadAiConfig() {
+    const savedKey = localStorage.getItem(STORAGE_KEY_AI_KEY) || '';
+    const savedEndpoint = localStorage.getItem(STORAGE_KEY_AI_ENDPOINT) || 'https://api.deepseek.com/chat/completions';
+    const savedModel = localStorage.getItem(STORAGE_KEY_AI_MODEL) || 'deepseek-chat';
+
+    if (elAiApiKeyInput) elAiApiKeyInput.value = savedKey;
+    if (elAiApiEndpointInput) elAiApiEndpointInput.value = savedEndpoint;
+    if (elAiModelSelect) elAiModelSelect.value = savedModel;
+
+    // 如果还没有 Key，首次打开抽屉时自动展开配置面板
+    if (!savedKey && elAiConfigPanel) {
+      elAiConfigPanel.classList.add('open');
+    }
+  }
+
+  // 保存 API 配置
+  if (elAiSaveConfigBtn) {
+    elAiSaveConfigBtn.addEventListener('click', () => {
+      const key = elAiApiKeyInput.value.trim();
+      const endpoint = elAiApiEndpointInput.value.trim() || 'https://api.deepseek.com/chat/completions';
+      const model = elAiModelSelect.value;
+
+      localStorage.setItem(STORAGE_KEY_AI_KEY, key);
+      localStorage.setItem(STORAGE_KEY_AI_ENDPOINT, endpoint);
+      localStorage.setItem(STORAGE_KEY_AI_MODEL, model);
+
+      elAiConfigPanel.classList.remove('open');
+      appendBotMessage(`✅ 配置已成功保存！当前模型：<strong>${model}</strong>。<br>您可以随时向我自由提问，或点击卡片下方的 <strong>[🤖 AI 追问]</strong>。`);
+    });
+  }
+
+  // 切换抽屉显隐
+  function openAiDrawer() {
+    if (elAiDrawer) {
+      elAiDrawer.classList.add('open');
+      if (elAiUserInput) elAiUserInput.focus();
+    }
+  }
+
+  function closeAiDrawer() {
+    if (elAiDrawer) elAiDrawer.classList.remove('open');
+  }
+
+  if (elAiFabBtn) elAiFabBtn.addEventListener('click', openAiDrawer);
+  if (elAiCloseBtn) elAiCloseBtn.addEventListener('click', closeAiDrawer);
+
+  if (elAiConfigToggleBtn) {
+    elAiConfigToggleBtn.addEventListener('click', () => {
+      if (elAiConfigPanel) elAiConfigPanel.classList.toggle('open');
+    });
+  }
+
+  if (elAiClearHistoryBtn) {
+    elAiClearHistoryBtn.addEventListener('click', () => {
+      if (confirm('确定要清空当前的对话历史吗？')) {
+        chatHistory = [];
+        if (elAiChatStream) {
+          elAiChatStream.innerHTML = `
+            <div class="ai-msg ai-msg-bot">
+              <div class="ai-avatar">🤖</div>
+              <div class="ai-bubble">
+                会话已重置。你好！我是你的 <strong>C# 上位机技术与面试 AI 导师</strong>，请随时提出你的问题！
+              </div>
+            </div>
+          `;
+        }
+      }
+    });
+  }
+
+  // 快捷问题点击直接发送
+  document.querySelectorAll('.ai-quick-tag').forEach(tagBtn => {
+    tagBtn.addEventListener('click', () => {
+      const prompt = tagBtn.dataset.prompt;
+      if (prompt) {
+        openAiDrawer();
+        handleUserSend(prompt);
+      }
+    });
+  });
+
+  // 全局卡片追问触发函数
+  window.askAiWithQuestion = function(id) {
+    const q = questions.find(item => item.id === id);
+    if (!q) return;
+
+    openAiDrawer();
+
+    const promptText = `请针对上位机面试题【${q.id} ${q.title}】（所属模块：${q.module}）展开深入剖析与答题辅导：
+1. 请结合真实工控现场与测控上位机场景，深度剖析这道题背后的核心技术原理与本质；
+2. 面试时如何给出条理清晰、让面试官印象深刻的高分回答与 C# 核心代码；
+3. 面试官可能顺藤摸瓜考察的连环挖坑追问与工业实战避坑指南。`;
+
+    handleUserSend(promptText);
+  };
+
+  // HTML 字符转义工具
+  function escapeHtml(str) {
+    return (str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // 轻量级 Markdown 语法解析器
+  function formatMarkdown(text) {
+    if (!text) return '';
+
+    // 1. 抽取多行代码块
+    const codeBlocks = [];
+    let safeText = text.replace(/```([a-zA-Z0-9_\-\.]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+      const idx = codeBlocks.length;
+      codeBlocks.push({ lang: lang || 'csharp', code: escapeHtml(code.trim()) });
+      return `___AI_CODE_BLOCK_${idx}___`;
+    });
+
+    // 2. 转义常规文本中的 HTML 标签
+    safeText = escapeHtml(safeText);
+
+    // 3. 粗体支持 **text**
+    safeText = safeText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    // 4. 单行行内代码 `code`
+    safeText = safeText.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // 5. 换行与段落
+    safeText = safeText.replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>');
+
+    // 6. 还原代码块
+    codeBlocks.forEach((item, idx) => {
+      const placeholder = `___AI_CODE_BLOCK_${idx}___`;
+      const codeHtml = `
+        <div class="ai-code-wrapper">
+          <div class="ai-code-header">
+            <span>${item.lang}</span>
+            <button class="ai-copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre><code class="language-${item.lang}">${item.code}</code></pre>
+        </div>
+      `;
+      safeText = safeText.replace(placeholder, codeHtml);
+    });
+
+    return safeText;
+  }
+
+  // 复制代码助手
+  window.copyCode = function(btn) {
+    try {
+      const codeEl = btn.closest('.ai-code-wrapper').querySelector('code');
+      if (codeEl) {
+        navigator.clipboard.writeText(codeEl.innerText).then(() => {
+          btn.innerText = '已复制!';
+          setTimeout(() => btn.innerText = '复制', 1600);
+        });
+      }
+    } catch (e) {
+      btn.innerText = '复制失败';
+    }
+  };
+
+  // 添加用户消息到聊天流
+  function appendUserMessage(text) {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'ai-msg ai-msg-user';
+    msgDiv.innerHTML = `
+      <div class="ai-bubble">${escapeHtml(text).replace(/\n/g, '<br/>')}</div>
+      <div class="ai-avatar">👤</div>
+    `;
+    elAiChatStream.appendChild(msgDiv);
+    elAiChatStream.scrollTop = elAiChatStream.scrollHeight;
+  }
+
+  // 添加机器人消息（支持流式逐步填充）
+  function appendBotMessage(initText = '') {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'ai-msg ai-msg-bot';
+    msgDiv.innerHTML = `
+      <div class="ai-avatar">🤖</div>
+      <div class="ai-bubble">${initText}</div>
+    `;
+    elAiChatStream.appendChild(msgDiv);
+    elAiChatStream.scrollTop = elAiChatStream.scrollHeight;
+    return msgDiv.querySelector('.ai-bubble');
+  }
+
+  // 核心：调用 DeepSeek API 进行流式生成
+  async function handleUserSend(textToSend) {
+    const text = (textToSend || (elAiUserInput ? elAiUserInput.value : '')).trim();
+    if (!text || isAiGenerating) return;
+
+    // 清空输入框并重置高度
+    if (elAiUserInput) elAiUserInput.value = '';
+
+    // 检查 API Key
+    const apiKey = localStorage.getItem(STORAGE_KEY_AI_KEY);
+    if (!apiKey) {
+      if (elAiConfigPanel) elAiConfigPanel.classList.add('open');
+      appendBotMessage(`⚠️ <strong>尚未配置 DeepSeek API Key</strong><br>请在上方配置栏中填入您的 DeepSeek API Key（例如 <code>sk-xxxxxxxx</code>），然后点击“保存配置”。<br><small style="color:var(--text-muted)">Key 仅保存在您本地浏览器中，绝不上云。</small>`);
+      return;
+    }
+
+    const endpoint = localStorage.getItem(STORAGE_KEY_AI_ENDPOINT) || 'https://api.deepseek.com/chat/completions';
+    const model = localStorage.getItem(STORAGE_KEY_AI_MODEL) || 'deepseek-chat';
+
+    // 1. 界面呈现用户消息
+    appendUserMessage(text);
+    chatHistory.push({ role: 'user', content: text });
+
+    // 2. 准备机器人气泡与状态
+    isAiGenerating = true;
+    if (elAiSendBtn) elAiSendBtn.disabled = true;
+
+    const botBubble = appendBotMessage('<span class="ai-typing-cursor"></span>');
+
+    // 3. 构建发送给模型的完整上下文
+    const messagesPayload = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...chatHistory.slice(-8) // 保留最近 8 轮对话上下文
+    ];
+
+    let fullAnswer = '';
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: messagesPayload,
+          stream: true,
+          temperature: 0.6
+        })
+      });
+
+      if (!response.ok) {
+        let errDetail = '';
+        try {
+          const errJson = await response.json();
+          errDetail = errJson.error ? errJson.error.message : JSON.stringify(errJson);
+        } catch (_) {
+          errDetail = await response.text();
+        }
+
+        if (response.status === 401) {
+          botBubble.innerHTML = `❌ <strong>API Key 认证失败 (401)</strong><br>请检查您的 API Key 是否正确。`;
+          if (elAiConfigPanel) elAiConfigPanel.classList.add('open');
+        } else {
+          botBubble.innerHTML = `❌ <strong>请求出错 (${response.status})</strong>: ${escapeHtml(errDetail)}`;
+        }
+        isAiGenerating = false;
+        if (elAiSendBtn) elAiSendBtn.disabled = false;
+        return;
+      }
+
+      // 4. 流式读取响应数据
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // 保留尚未结束的行
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          if (trimmed === 'data: [DONE]') break;
+
+          try {
+            const data = JSON.parse(trimmed.slice(5).trim());
+            const delta = data.choices && data.choices[0] && data.choices[0].delta;
+            if (delta && delta.content) {
+              fullAnswer += delta.content;
+              // 实时更新渲染
+              botBubble.innerHTML = formatMarkdown(fullAnswer) + '<span class="ai-typing-cursor"></span>';
+              elAiChatStream.scrollTop = elAiChatStream.scrollHeight;
+            }
+          } catch (e) {
+            // 忽略碎片 json 解析异常
+          }
+        }
+      }
+
+      // 生成完毕，移除光标
+      botBubble.innerHTML = formatMarkdown(fullAnswer);
+      chatHistory.push({ role: 'assistant', content: fullAnswer });
+
+    } catch (err) {
+      console.error('AI Error:', err);
+      botBubble.innerHTML = `❌ <strong>连接失败</strong>: 无法连接至接口（${escapeHtml(err.message)}）。<br>提示：若官方端点被浏览器跨域阻断，可在配置面板中使用中转代理端点。`;
+    } finally {
+      isAiGenerating = false;
+      if (elAiSendBtn) elAiSendBtn.disabled = false;
+    }
+  }
+
+  // 发送按钮点击与回车键绑定
+  if (elAiSendBtn) {
+    elAiSendBtn.addEventListener('click', () => handleUserSend());
+  }
+
+  if (elAiUserInput) {
+    elAiUserInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleUserSend();
+      }
+    });
+  }
+
+  // 加载配置
+  loadAiConfig();
+
+  // 16. 初始化运行
   updateDashboard();
   renderQuestions();
 })();
+

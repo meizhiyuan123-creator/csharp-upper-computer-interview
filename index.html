@@ -113,6 +113,81 @@
     <main class="question-list" id="questionList">
       <!-- 动态由 app.js 渲染 -->
     </main>
+
+    <!-- AI 悬浮入口按钮 -->
+    <button id="aiFabBtn" class="ai-fab-btn" title="唤起 C# 上位机 AI 智囊">
+      <span class="ai-fab-icon">🤖</span>
+      <span class="ai-fab-text">AI 助手</span>
+    </button>
+
+    <!-- AI 对话抽屉面板 -->
+    <div id="aiDrawer" class="ai-drawer">
+      <!-- 抽屉头部 -->
+      <div class="ai-drawer-header">
+        <div class="ai-drawer-brand">
+          <span class="ai-pulse-dot"></span>
+          <div>
+            <div class="ai-drawer-title">上位机技术与面试 AI 智囊</div>
+            <div class="ai-drawer-sub">Powered by DeepSeek · 自由提问 / 面试题深挖</div>
+          </div>
+        </div>
+        <div class="ai-drawer-actions">
+          <button id="aiConfigToggleBtn" class="ai-icon-btn" title="配置 API Key">⚙️</button>
+          <button id="aiClearHistoryBtn" class="ai-icon-btn" title="清空对话">🗑️</button>
+          <button id="aiCloseBtn" class="ai-icon-btn" title="收起面板">✕</button>
+        </div>
+      </div>
+
+      <!-- API 配置卡片（默认根据是否有Key折叠） -->
+      <div id="aiConfigPanel" class="ai-config-panel">
+        <div class="ai-config-row">
+          <label class="ai-config-label">DeepSeek API Key：</label>
+          <input type="password" id="aiApiKeyInput" class="ai-config-input" placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx">
+        </div>
+        <div class="ai-config-row" style="margin-top: 8px;">
+          <label class="ai-config-label">API 接口端点 (默认官方)：</label>
+          <input type="text" id="aiApiEndpointInput" class="ai-config-input" value="https://api.deepseek.com/chat/completions">
+        </div>
+        <div class="ai-config-row" style="margin-top: 8px;">
+          <label class="ai-config-label">模型：</label>
+          <select id="aiModelSelect" class="ai-config-select">
+            <option value="deepseek-chat" selected>deepseek-chat (极速响应，推荐)</option>
+            <option value="deepseek-reasoner">deepseek-reasoner (R1深度思考模型)</option>
+          </select>
+        </div>
+        <div class="ai-config-footer">
+          <span class="ai-config-hint">🔒 Key 仅存储于当前浏览器本地，绝不上云</span>
+          <button id="aiSaveConfigBtn" class="ai-save-btn">保存配置</button>
+        </div>
+      </div>
+
+      <!-- 对话消息展示流 -->
+      <div id="aiChatStream" class="ai-chat-stream">
+        <!-- 初始欢迎语消息 -->
+        <div class="ai-msg ai-msg-bot">
+          <div class="ai-avatar">🤖</div>
+          <div class="ai-bubble">
+            你好！我是你的 <strong>C# 上位机面试与工程技术 AI 导师</strong>。<br><br>
+            无论是<strong>自由提问</strong>（如某个工控协议、WPF 内存泄漏排查、海康相机 SDK 细节），还是<strong>针对题库中的某道题深入追问</strong>，我都可以为你提供高密度、符合工业实战的专业解答！
+          </div>
+        </div>
+      </div>
+
+      <!-- 快捷提示词标签栏 -->
+      <div class="ai-quick-tags">
+        <button class="ai-quick-tag" data-prompt="请问上位机开发中，串口高频通信怎么避免丢包和内存泄漏？">🔌 串口高频防丢包</button>
+        <button class="ai-quick-tag" data-prompt="WPF 中 Dispatcher.Invoke 和 BeginInvoke 的核心区别与死锁场景是什么？">⚡ Dispatcher 避坑</button>
+        <button class="ai-quick-tag" data-prompt="如果面试官让我手写一个生产者消费者队列，在 C# 中最优写法是什么？">🧵 手写生产消费队列</button>
+      </div>
+
+      <!-- 底部输入栏 -->
+      <div class="ai-input-bar">
+        <textarea id="aiUserInput" class="ai-textarea" rows="2" placeholder="在此自由输入技术问题，或粘贴面试题目... (Shift+Enter换行，Enter发送)"></textarea>
+        <button id="aiSendBtn" class="ai-send-btn">
+          <span>发送</span>
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- 引入数据源与交互脚本 -->
