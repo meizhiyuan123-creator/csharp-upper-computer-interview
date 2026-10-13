@@ -323,22 +323,16 @@
   const STORAGE_KEY_AI_ENDPOINT = 'csharp_ai_api_endpoint';
   const STORAGE_KEY_AI_MODEL = 'csharp_ai_model';
 
-  // 资深上位机面试导师与架构专家系统提示词
-  const SYSTEM_PROMPT = `你是一位拥有10年以上工业工控与智能制造研发经验的【资深 C# / .NET 上位机架构专家与资深工控大厂面试导师】。
-你的核心任务是：全面解答上位机软件工程师的求职面试题、梳理面试高分技巧、深度排查工业现场技术疑难、提供架构选型与高鲁棒性代码方案。用户可能会针对知识库中的某道题目深度追问，也可能会随时进行任意工业技术/工控难题的自由提问。
+  // 资深上位机面试导师与架构专家系统提示词 (精简干练风格)
+  const SYSTEM_PROMPT = `你是一位精通 C# / .NET 8 / WPF / 工业测控与通信架构的【资深上位机架构专家与工控大厂面试导师】。
+你的任务是为工程师快速解答上位机求职面试题、自由技术咨询、通信排错与架构选型。
 
-【你的核心专业领域与工业知识图谱】
-1. 语言与运行时底层：精通 C# 8-12 现代语法、.NET 8 / .NET Framework 运行时底层架构、CLR 内存模型、GC 分代回收与大对象堆（LOH）碎片治理、Span<T>/Memory<T> 零拷贝高吞吐处理、dotMemory / PerfView / WinDbg 内存泄漏与高 CPU 根因排查。
-2. 桌面 GUI 与测控前端：深度掌握 WPF 与 WinForms 架构机制、Prism / CommunityToolkit.Mvvm 解耦设计、依赖属性、路由事件、Dispatcher 线程调度与死锁防范、UI 虚拟化、海量工业波形与点位毫秒级刷新（WriteableBitmap、SkiaSharp、OxyPlot）。
-3. 工业通信与硬件总线：精通 Modbus (RTU/TCP/ASCII)、主流 PLC 驱动（西门子 S7.Net/Snap7、三菱 MC/SLMP、欧姆龙 FINS、倍福 ADS）、OPC UA / DA、CANopen、EtherCAT；深入掌握串口 SerialPort 底层防丢包重连、分包粘包协议解析（状态机 / 环形缓冲区 RingBuffer / Pipelines）、SocketAsyncEventArgs 高并发网络通信。
-4. 工业多线程与实时并发：精通 Task / async-await 底层状态机、Channel<T>、BlockingCollection、无锁队列（ConcurrentQueue）、高精度工业级多媒体定时器（timeSetEvent / MMTimer / Stopwatch 轮询）、多线程同步锁（Monitor、SemaphoreSlim、Mutex、ReaderWriterLockSlim）。
-5. 工业视觉与运动控制集成：海康 / 大华 / Basler 工业相机 SDK 取流与图像内存生命周期管理、OpenCV / Halcon 图像处理管道与 C++ 跨语言 P/Invoke、运动控制卡（固高、雷赛、正运动）多轴联动插补与原点复归、各类工业传感器（扫码枪、温控表、电子秤）协议集成。
-
-【回答风格与规范】
-1. 直击要害：先用 1-2 句精炼结论定性技术本质，拒绝冗长套话；
-2. 工业实战优先：所有分析紧扣真实工厂产线、工控机、7x24 稳定运行等真实痛点（如高频丢包、UI冻结、死锁、内存踩踏、断线重连震荡等）；
-3. 代码地道健壮：提供的 C# 代码遵循现代规范，注重异常捕获、资源释放（IDisposable / using）、CancellationToken 协同超时控制；
-4. 面试场景赋能：若是面试相关提问，主动拆解“面试官的核心考点与期望回答”、“避坑要点”及“能让面试官眼前一亮的架构级加分答法”。`;
+【⚡ 核心原则：回答简明扼要、直切要害、拒绝长篇大论】
+用户在侧边抽屉快速查阅，需要高效吸收，严禁冗长铺垫与大段套话：
+1. 【字数严格受限】：全篇严格控制在 150 ~ 300 字左右，言简意赅、句句干货。
+2. 【清晰分点】：按 1~3 点归纳，每点仅用 1~2 句话切中底层本质与工业现场经验。
+3. 【极简代码】：若需提供代码，仅贴 5~12 行最核心关键实现，禁止贴大段无意义样板代码。
+4. 【面试亮点】：若是面试题，给出 1 句张口就来的“定性金句” + 1 个现场避坑警示。`;
 
   // AI 交互 DOM
   const elAiFabBtn = document.getElementById('aiFabBtn');
@@ -354,10 +348,62 @@
   const elAiChatStream = document.getElementById('aiChatStream');
   const elAiUserInput = document.getElementById('aiUserInput');
   const elAiSendBtn = document.getElementById('aiSendBtn');
+  const elAiResizeHandle = document.getElementById('aiResizeHandle');
 
-  // 本地会话消息历史 (保存当前会话的上下文，最多保留最近 12 条避免超 token)
+  // 本地会话消息历史 (保存当前会话的上下文，最多保留最近 8 条避免超 token)
   let chatHistory = [];
   let isAiGenerating = false;
+
+  // 侧边栏拖拽调宽交互
+  if (elAiResizeHandle && elAiDrawer) {
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    elAiResizeHandle.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      startX = e.clientX;
+      startWidth = elAiDrawer.offsetWidth;
+      elAiDrawer.classList.add('resizing');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isResizing) return;
+      // 抽屉贴在屏幕右边，向左拖增加宽度，向右拖缩小宽度
+      const deltaX = startX - e.clientX;
+      let newWidth = startWidth + deltaX;
+      const minWidth = 360;
+      const maxWidth = Math.min(window.innerWidth * 0.92, 1400);
+      newWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+      elAiDrawer.style.width = `${newWidth}px`;
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        elAiDrawer.classList.remove('resizing');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        try {
+          localStorage.setItem('csharp_ai_drawer_width', elAiDrawer.offsetWidth);
+        } catch (_) {}
+      }
+    });
+
+    // 恢复历史宽度
+    try {
+      const savedWidth = localStorage.getItem('csharp_ai_drawer_width');
+      if (savedWidth && window.innerWidth > 640) {
+        const parsed = parseInt(savedWidth, 10);
+        if (!isNaN(parsed) && parsed >= 360) {
+          elAiDrawer.style.width = `${Math.min(parsed, window.innerWidth * 0.92)}px`;
+        }
+      }
+    } catch (_) {}
+  }
 
   // 读取已保存的 API 配置
   function loadAiConfig() {
@@ -387,7 +433,7 @@
       localStorage.setItem(STORAGE_KEY_AI_MODEL, model);
 
       elAiConfigPanel.classList.remove('open');
-      appendBotMessage(`✅ 配置已成功保存！当前模型：<strong>${model}</strong>。<br>您可以随时向我自由提问，或点击卡片下方的 <strong>[🤖 AI 追问]</strong>。`);
+      appendBotMessage(`✅ 配置已保存！当前模型：<strong>${model}</strong>。<br>您可以随时自由提问，或点击卡片下方的 <strong>[🤖 AI 追问]</strong>。`);
     });
   }
 
@@ -441,20 +487,22 @@
     });
   });
 
-  // 全局卡片追问触发函数
+  // 全局卡片追问触发函数 (精炼版)
   window.askAiWithQuestion = function(id) {
     const q = questions.find(item => item.id === id);
     if (!q) return;
 
     openAiDrawer();
 
-    const promptText = `请针对上位机面试题【${q.id} ${q.title}】（所属模块：${q.module}）展开深入剖析与答题辅导：
-1. 请结合真实工控现场与测控上位机场景，深度剖析这道题背后的核心技术原理与本质；
-2. 面试时如何给出条理清晰、让面试官印象深刻的高分回答与 C# 核心代码；
-3. 面试官可能顺藤摸瓜考察的连环挖坑追问与工业实战避坑指南。`;
+    const promptText = `请简要剖析上位机面试题【${q.id} ${q.title}】：
+1. 核心本质与底层考点（1-2句概括）；
+2. 面试张口即答的高分亮点；
+3. 一句工业实战避坑提醒。
+（请保持回答精炼，严控在200字以内，无需冗长铺垫）`;
 
     handleUserSend(promptText);
   };
+
 
   // HTML 字符转义工具
   function escapeHtml(str) {
