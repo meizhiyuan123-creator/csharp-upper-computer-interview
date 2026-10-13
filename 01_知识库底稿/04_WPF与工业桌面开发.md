@@ -1,6 +1,6 @@
 # WPF与工业桌面开发 · 上位机核心面试题库
 
-> 本模块共收录 **4** 道上位机核心考点。严格遵循《C#上位机知识库准录与评估规范》编制。
+> 本模块共收录 **6** 道上位机核心考点。严格遵循《C#上位机知识库准录与评估规范》编制。
 
 ---
 
@@ -131,5 +131,83 @@ WPF 几乎所有控件都继承自 `DispatcherObject`。其内部维护了一个
 
 ### ⚠️ 常见连环追问
 - Q: RegionManager 的原理是什么？（答：在 View 中预留占位符 Region，由控制器动态将指定的 UserControl 导航/注入到该区域，实现界面的多视窗动态拼装）
+
+---
+
+## 5. 桌面端架构选型：MVVM 与传统 MVC 的本质区别是什么？为什么现代桌面客户端（WPF/Avalonia）更青睐 MVVM？
+
+- **题目标识**：`WPF-05`
+- **重要程度**：⭐⭐⭐⭐ (4星)
+- **核心标签**：`架构设计` `MVVM` `MVC对比` `WPF` `Avalonia`
+
+### 💡 30秒速记提纲（面试张口就来）
+> 1. **核心差异**：MVC 中 Controller 作为中枢持有 View 与 Model，需要编写命令式代码去操作 View 刷新；MVVM 中彻底去除了 Controller，ViewModel 纯粹作为 View 的状态抽象，**完全不持有 View 的任何引用**。
+> 2. **技术纽带**：MVVM 依赖 XAML 强大的**双向数据绑定（Binding）与属性通知机制**（INotifyPropertyChanged），数据发生变更自动驱动 UI，用户在 UI 的输入自动回写数据，彻底省去手动操作控件属性的样板代码。
+> 3. **桌面端首选原因**：ViewModel 完全脱离 View 控件生命周期，可以**脱离界面直接进行 100% 自动化的业务单元测试**；同时实现了“界面设计（XAML）”与“逻辑开发（C#）”的真正解耦并行。
+
+### 🔍 深入原理解析
+### 1. 经典架构模式图谱演进
+- **MVC（Model-View-Controller）**：用户事件由 View 送给 Controller，Controller 更新 Model，Controller 再命令 View 更新（或者 Model 改变触发 View 刷新）。Controller 与 View 互相持有，桌面端容易形成庞大臃肿且难以测试的 Controller。
+- **MVVM（Model-View-ViewModel）**：
+  - **View**：仅负责 XAML 布局、样式、动画，声明 `{Binding Path=Speed}`；
+  - **ViewModel**：封装视图状态与命令（ICommand），实现 `INotifyPropertyChanged`，**绝对不包含任何 UI 命名空间（不引用 System.Windows）**；
+  - **Model**：纯粹的业务领域模型与数据持久层。
+
+### 2. 核心价值对比表
+| 维度 | 传统 MVC | WPF/Avalonia MVVM |
+| :--- | :--- | :--- |
+| **UI 更新方式** | 命令式代码：`txtSpeed.Text = val.ToString()` | 声明式数据绑定：`Text="{Binding Speed}"` |
+| **控制器/VM依赖** | Controller 强依赖 View 接口或具体类 | ViewModel 对 View 完全无感知（0 依赖） |
+| **单元测试** | 极难，因为 Controller 绑死控件句柄与生命周期 | 极易，直接实例化 ViewModel 测试属性与 Command |
+| **开发协同** | 逻辑与界面混杂在 Code-Behind，难以协同 | 设计师专注 XAML，程序员专注 ViewModel |
+
+### 🛠️ 上位机实战避坑（工程案例）
+在复杂上位机仪器界面重构中：早期的 WinForms/Code-Behind 模式在一个窗体里塞了上万行代码，包含串口解析、数据计算与控件属性赋值，增加一个电机控件导致整个页面频繁报错且无法做自动化测试。重构为 Prism MVVM 架构后，ViewModel 成为纯粹的 C# POCO 类，针对跑台调速、紧急停机编写了 50 多个单元测试用例在 CI 流水线秒级跑通，代码质量与稳定性大幅提升。
+
+### ⚠️ 常见连环追问
+- Q: MVVM 模式中，ViewModel 如何在不直接引用 View 的前提下通知弹窗或关闭窗口？（答：通过抽象的 IDialogService 弹窗服务接口注入，或者利用 Prism 的 EventAggregator / CommunityToolkit.Mvvm 的 WeakReferenceMessenger 发送跨模块通知）
+- Q: 为什么不能为了省事在 ViewModel 里调用 this.FindName("controlName")？（答：这样破坏了 ViewModel 不依赖 View 的核心契约，使得 ViewModel 无法在无界面的单元测试环境中运行，退化为了 Code-Behind 坏味道）
+
+---
+
+## 6. C# 现代桌面端跨平台方案（Avalonia）与大型桌面客户端多进程 IPC 架构如何设计？
+
+- **题目标识**：`WPF-06`
+- **重要程度**：⭐⭐⭐ (3星)
+- **核心标签**：`跨平台桌面` `Avalonia` `多进程` `IPC` `StreamJsonRpc`
+
+### 💡 30秒速记提纲（面试张口就来）
+> 1. **Avalonia 跨平台优势**：基于 Skia 跨平台图形渲染引擎，拥有与 WPF 极其相似的 XAML 语法与 MVVM 体验，一套代码原生运行在 Windows、macOS、Linux（信创国产生态环境）以及 Android/iOS。
+> 2. **多进程架构核心价值**：将**不稳定易崩溃的第三方驱动（如老旧 C++ DLL）或极耗 CPU 的音视频编解码**剥离为独立的无界面后台进程，与主 UI 进程实现物理级容灾隔离。
+> 3. **IPC 通信选型**：进程间通信优先选择**命名管道（NamedPipe）**或本地 Socket，上层协议采用 **StreamJsonRpc** 或 **MessagePack** 实现强类型异步 RPC 调用。
+
+### 🔍 深入原理解析
+### 1. Avalonia 与 WPF 核心对比
+| 维度 | WPF | Avalonia |
+| :--- | :--- | :--- |
+| **平台支持** | 仅限 Windows（依赖 Win32 / DirectX） | 真正的跨平台（Windows, macOS, Linux, WebAssembly） |
+| **底层渲染** | 基于 DirectX 9/11 合成 | 基于 Skia 跨平台 2D 渲染引擎 |
+| **样式系统** | 类似 CSS 简单的 Setter | 类似 CSS 的高级选择器系统（`:pointerover`） |
+| **架构兼容** | MVVM, INPC, ICommand | 100% 兼容 CommunityToolkit.Mvvm, ReactiveUI |
+
+### 2. 大型客户端多进程 IPC 架构落地
+```
+[主客户端进程 (WPF / Avalonia)]
+         ▲
+         │ (双向异步 RPC: StreamJsonRpc / 命名管道)
+         ▼
+[驱动与算法守护进程 (Console App / Background Worker)]
+         │ (P/Invoke 调用不稳定 C++ SDK)
+         ▼
+[第三方硬件 / 相机 / 仪器]
+```
+- 主进程通过 `Process.Start` 启动子进程并建立两端命名管道连接。
+- 子进程若发生非托管内存段错误（Crash），主进程捕获管道中断事件，弹窗提示并自动拉起重启子进程，主程序界面永不闪退。
+
+### 🛠️ 上位机实战避坑（工程案例）
+在多通道综合测控系统中，某老旧光谱仪驱动 DLL 偶发内存访问越界导致宿主进程直接被操作系统终止。重构为多进程架构：单独编写了一个无界面的 Console 守护进程承载该驱动，主 WPF 界面通过命名管道使用 StreamJsonRpc 进行数据同步。系统上线后，即使该驱动偶发崩溃，主界面能在 1 秒内自动拉起子进程无缝恢复，整机 7x24 小时运行可用率达到 99.99%。
+
+### ⚠️ 常见连环追问
+- Q: StreamJsonRpc 与 gRPC 相比有什么优势？（答：StreamJsonRpc 极其轻量，支持在双向 Stream 如命名管道上直接运行，无需依赖重量级的 HTTP/2 协议栈与证书配置，非常适合本机进程间通信）
 
 ---

@@ -1,6 +1,6 @@
 # C#与.NET8核心基础 · 上位机核心面试题库
 
-> 本模块共收录 **3** 道上位机核心考点。严格遵循《C#上位机知识库准录与评估规范》编制。
+> 本模块共收录 **4** 道上位机核心考点。严格遵循《C#上位机知识库准录与评估规范》编制。
 
 ---
 
@@ -95,5 +95,46 @@ public void remove_DataChanged(Action<int> value) { ... } // 线程安全的 Del
 
 ### ⚠️ 常见连环追问
 - Q: string.Intern() 和 string.IsInterned() 的作用？（答：手动将运行时动态生成的字符串放入驻留池或查询是否存在，用于海量重复字典字符串的去重优化）
+
+---
+
+## 4. 在实际工业测控/桌面客户端项目中，你深度用过哪些 C# 高级特性？具体解决了什么工程问题？
+
+- **题目标识**：`CS-04`
+- **重要程度**：⭐⭐⭐⭐ (4星)
+- **核心标签**：`语言特性` `泛型约束` `async/await` `Span` `委托事件` `特性`
+
+### 💡 30秒速记提纲（面试张口就来）
+> 1. **泛型与泛型约束**：封装通用的设备指令队列与数据仓储基类 `Repository<T> where T : class, IEntity, new()`，消除装箱拆箱并保证编译期类型安全。
+> 2. **委托、事件与弱事件**：实现设备层到 UI 层的解耦广播；结合 `WeakEventManager` 根除长生命周期服务与临时弹窗未解绑引发的内存泄漏。
+> 3. **async/await 异步编程**：彻底解决串口/网络/硬件 I/O 阻塞导致 UI 卡死的问题，确保界面 60 FPS 流畅操作。
+> 4. **Span<T> / Memory<T> 零拷贝**：在高频传感器与千兆网数据包切片中实现 0 堆内存分配，消除 GC 停顿抖动。
+> 5. **特性（Attribute）与反射/源生成器**：自定义通信报文序列化特性 `[PacketField(Offset, Length)]`，大幅精简报文打包解包代码。
+
+### 🔍 深入原理解析
+### 1. 结合工程场景的 5 大核心高级特性图谱
+- **特性一：泛型约束（Generic Constraints）**
+  - *实战*：`public class CommandQueue<TCommand> where TCommand : IModbusCommand, new()`。限制只能传入合法的指令类型，避免运行时类型强转引发 `InvalidCastException`。
+- **特性二：async/await 与 Task 状态机**
+  - *实战*：通信发送指令必须使用 `await serialPort.BaseStream.ReadAsync(...)`，释放当前线程回线程池，彻底告别 UI 线程“假死”。
+- **特性三：Span<T> 栈切片与零拷贝**
+  - *实战*：下位机 1024 字节复合报文，通过 `ReadOnlySpan<byte>.Slice()` 切片验证 CRC，全链路 0 次托管堆内存分配。
+- **特性四：模式匹配（Pattern Matching）**
+  - *实战*：使用 C# 8+ switch 表达式处理不同设备报警：
+    ```csharp
+    string message = alarm switch {
+        OverHeatAlarm h => $"电机过热: {h.Temperature}℃",
+        DisconnectAlarm => "总线断开重连中",
+        _ => "未知报警"
+    };
+    ```
+- **特性五：自定义特性（Attribute）与源生成器**
+  - *实战*：利用 CommunityToolkit.Mvvm 的 `[ObservableProperty]` 源生成器，在编译期自动生成 `INotifyPropertyChanged` 样板代码，兼顾代码极其简洁与零反射高性能。
+
+### 🛠️ 上位机实战避坑（工程案例）
+在步态动力学上位机中，结合了特性与泛型构建了统一二进制协议序列化组件：对下位机结构体打上 `[StructLayout(LayoutKind.Sequential, Pack = 1)]` 特性，利用 `MemoryMarshal.Cast<byte, T>(span)` 实现纳秒级结构体与字节数组互转，单次数据包解析耗时小于 1 微秒，CPU 占用率忽略不计。
+
+### ⚠️ 常见连环追问
+- Q: 为什么在工控通信方法中不要轻易使用反射遍历字段？（答：反射在每次调用时涉及元数据查找和类型检查，高频循环下性能极差；应在初始化时预热缓存委托，或改用编译期源生成器 Source Generator）
 
 ---

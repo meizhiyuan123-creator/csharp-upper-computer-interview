@@ -416,5 +416,84 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: TCP 粘包问题在 UDP 中存在吗？（答：不存在！UDP 是面向报文的，操作系统会完整保留发送端的数据边界，每次 recvfrom 读到的就是一整个完整的数据报）"
     ]
+  },
+  {
+    "id": "VIS-04",
+    "module": "工业相机与视觉及底层",
+    "stars": 5,
+    "tags": [
+      "工业相机",
+      "硬件抽象层",
+      "HAL",
+      "SDK封装",
+      "海康与大华"
+    ],
+    "title": "工业相机硬件抽象层（HAL）设计：如何优雅封装海康、大华等不同品牌 SDK 并实现上层业务无缝平滑切换？",
+    "summary": "1. **定性**：遵循依赖倒置原则（DIP）与面向接口编程，在上层业务与底层厂商 SDK 之间构建统一的**硬件抽象层（HAL，Hardware Abstraction Layer）**。\n2. **核心机制**：定义 `ICamera` 通用契约接口（曝光、增益、采流、触发、回调），统一输出不依赖厂商的原始帧数据模型（包含宽高、格式、非托管指针）；各品牌 SDK 编写适配器类实现该接口。\n3. **无缝替换**：驱动内部消除厂商专有枚举（通过字典映射），错误码统一转译为自定义业务异常；通过依赖注入（DI）与工厂模式配置加载，实现换相机时上层业务代码 0 修改。",
+    "detail": "### 1. 硬件抽象层（HAL）分层设计架构\n```\n[业务展示层 / ViewModel] -> 依赖抽象\n       │\n       ▼\n[统一硬件抽象层 (HAL)] : ICamera 接口, CameraFrame 实体, CameraException 异常体系\n       ▲                      ▲\n       │ (实现)                │ (实现)\n[海康驱动适配器 (HikDriver)]    [大华驱动适配器 (DahuaDriver)]\n       │                      │\n       ▼                      ▼\n[海康原生 MvCamera SDK]        [大华原生 DaHua Camera SDK]\n```\n\n### 2. 核心通用接口契约设计（示例代码）\n```csharp\npublic interface ICamera : IDisposable {\n    string DeviceId { get; }\n    bool IsConnected { get; }\n    bool IsGrabbing { get; }\n    event EventHandler<CameraFrameReceivedEventArgs> FrameReceived;\n    \n    Task OpenAsync();\n    Task CloseAsync();\n    Task StartGrabbingAsync();\n    Task StopGrabbingAsync();\n    void SetExposureTime(float microSeconds);\n    void SetGain(float gain);\n    void SetTriggerMode(TriggerMode mode);\n    void TriggerSoftware();\n}\n\n// 统一输出帧实体，抹平厂商私有结构\npublic class CameraFrameReceivedEventArgs : EventArgs {\n    public IntPtr DataPointer { get; init; }\n    public int Width { get; init; }\n    public int Height { get; init; }\n    public int Stride { get; init; }\n    public PixelFormat Format { get; init; }\n    public long Timestamp { get; init; }\n}\n```\n\n### 3. 依赖注入与工厂配置动态加载\n在 `App.xaml.cs` 容器注册中：\n```csharp\n// 通过配置文件动态决定注入海康还是大华\nstring vendor = ConfigurationManager.AppSettings[\"CameraVendor\"];\nservices.AddSingleton<ICamera>(sp => vendor switch {\n    \"Dahua\" => new DahuaCameraDriver(cameraId),\n    _ => new HikCameraDriver(cameraId)\n});\n```",
+    "practice": "在三路工业相机测控项目中，当客户从海康千兆网工业相机更换为大华 USB3.0 相机时：由于整个系统严格依赖 `ICamera` 接口与统一的 `CameraFrameReceivedEventArgs`，开发人员仅需单独编写 `DahuaCameraDriver` 适配实现类并配置 DI 容器。上层的 HSV 动态分析算法、视频录像落盘以及 WriteableBitmap 渲染管线代码完全零修改，设备切换由原本预估的 2 周缩短为半天联调完成交付。",
+    "follow_ups": [
+      "Q: 各厂商相机的像素格式（PixelFormat）枚举和命名差异如何消除？（答：在 HAL 层定义统一的标准像素格式枚举，各驱动在接收到原始回调帧后通过预建映射表转译，或驱动层提供统一转 Bgr24 的无锁快速转换）",
+      "Q: 软触发与硬触发的调用逻辑在接口层如何通用？（答：在 ICamera 统一暴露 TriggerMode 属性与 TriggerSoftware() 方法，底层海康调用 MV_CC_SetTriggerMode / MV_CC_TriggerSoftware，大华调用 CameraSetTriggerMode / CameraSoftTrigger）"
+    ]
+  },
+  {
+    "id": "WPF-05",
+    "module": "WPF与工业桌面开发",
+    "stars": 4,
+    "tags": [
+      "架构设计",
+      "MVVM",
+      "MVC对比",
+      "WPF",
+      "Avalonia"
+    ],
+    "title": "桌面端架构选型：MVVM 与传统 MVC 的本质区别是什么？为什么现代桌面客户端（WPF/Avalonia）更青睐 MVVM？",
+    "summary": "1. **核心差异**：MVC 中 Controller 作为中枢持有 View 与 Model，需要编写命令式代码去操作 View 刷新；MVVM 中彻底去除了 Controller，ViewModel 纯粹作为 View 的状态抽象，**完全不持有 View 的任何引用**。\n2. **技术纽带**：MVVM 依赖 XAML 强大的**双向数据绑定（Binding）与属性通知机制**（INotifyPropertyChanged），数据发生变更自动驱动 UI，用户在 UI 的输入自动回写数据，彻底省去手动操作控件属性的样板代码。\n3. **桌面端首选原因**：ViewModel 完全脱离 View 控件生命周期，可以**脱离界面直接进行 100% 自动化的业务单元测试**；同时实现了“界面设计（XAML）”与“逻辑开发（C#）”的真正解耦并行。",
+    "detail": "### 1. 经典架构模式图谱演进\n- **MVC（Model-View-Controller）**：用户事件由 View 送给 Controller，Controller 更新 Model，Controller 再命令 View 更新（或者 Model 改变触发 View 刷新）。Controller 与 View 互相持有，桌面端容易形成庞大臃肿且难以测试的 Controller。\n- **MVVM（Model-View-ViewModel）**：\n  - **View**：仅负责 XAML 布局、样式、动画，声明 `{Binding Path=Speed}`；\n  - **ViewModel**：封装视图状态与命令（ICommand），实现 `INotifyPropertyChanged`，**绝对不包含任何 UI 命名空间（不引用 System.Windows）**；\n  - **Model**：纯粹的业务领域模型与数据持久层。\n\n### 2. 核心价值对比表\n| 维度 | 传统 MVC | WPF/Avalonia MVVM |\n| :--- | :--- | :--- |\n| **UI 更新方式** | 命令式代码：`txtSpeed.Text = val.ToString()` | 声明式数据绑定：`Text=\"{Binding Speed}\"` |\n| **控制器/VM依赖** | Controller 强依赖 View 接口或具体类 | ViewModel 对 View 完全无感知（0 依赖） |\n| **单元测试** | 极难，因为 Controller 绑死控件句柄与生命周期 | 极易，直接实例化 ViewModel 测试属性与 Command |\n| **开发协同** | 逻辑与界面混杂在 Code-Behind，难以协同 | 设计师专注 XAML，程序员专注 ViewModel |",
+    "practice": "在复杂上位机仪器界面重构中：早期的 WinForms/Code-Behind 模式在一个窗体里塞了上万行代码，包含串口解析、数据计算与控件属性赋值，增加一个电机控件导致整个页面频繁报错且无法做自动化测试。重构为 Prism MVVM 架构后，ViewModel 成为纯粹的 C# POCO 类，针对跑台调速、紧急停机编写了 50 多个单元测试用例在 CI 流水线秒级跑通，代码质量与稳定性大幅提升。",
+    "follow_ups": [
+      "Q: MVVM 模式中，ViewModel 如何在不直接引用 View 的前提下通知弹窗或关闭窗口？（答：通过抽象的 IDialogService 弹窗服务接口注入，或者利用 Prism 的 EventAggregator / CommunityToolkit.Mvvm 的 WeakReferenceMessenger 发送跨模块通知）",
+      "Q: 为什么不能为了省事在 ViewModel 里调用 this.FindName(\"controlName\")？（答：这样破坏了 ViewModel 不依赖 View 的核心契约，使得 ViewModel 无法在无界面的单元测试环境中运行，退化为了 Code-Behind 坏味道）"
+    ]
+  },
+  {
+    "id": "CS-04",
+    "module": "C#与.NET8核心基础",
+    "stars": 4,
+    "tags": [
+      "语言特性",
+      "泛型约束",
+      "async/await",
+      "Span",
+      "委托事件",
+      "特性"
+    ],
+    "title": "在实际工业测控/桌面客户端项目中，你深度用过哪些 C# 高级特性？具体解决了什么工程问题？",
+    "summary": "1. **泛型与泛型约束**：封装通用的设备指令队列与数据仓储基类 `Repository<T> where T : class, IEntity, new()`，消除装箱拆箱并保证编译期类型安全。\n2. **委托、事件与弱事件**：实现设备层到 UI 层的解耦广播；结合 `WeakEventManager` 根除长生命周期服务与临时弹窗未解绑引发的内存泄漏。\n3. **async/await 异步编程**：彻底解决串口/网络/硬件 I/O 阻塞导致 UI 卡死的问题，确保界面 60 FPS 流畅操作。\n4. **Span<T> / Memory<T> 零拷贝**：在高频传感器与千兆网数据包切片中实现 0 堆内存分配，消除 GC 停顿抖动。\n5. **特性（Attribute）与反射/源生成器**：自定义通信报文序列化特性 `[PacketField(Offset, Length)]`，大幅精简报文打包解包代码。",
+    "detail": "### 1. 结合工程场景的 5 大核心高级特性图谱\n- **特性一：泛型约束（Generic Constraints）**\n  - *实战*：`public class CommandQueue<TCommand> where TCommand : IModbusCommand, new()`。限制只能传入合法的指令类型，避免运行时类型强转引发 `InvalidCastException`。\n- **特性二：async/await 与 Task 状态机**\n  - *实战*：通信发送指令必须使用 `await serialPort.BaseStream.ReadAsync(...)`，释放当前线程回线程池，彻底告别 UI 线程“假死”。\n- **特性三：Span<T> 栈切片与零拷贝**\n  - *实战*：下位机 1024 字节复合报文，通过 `ReadOnlySpan<byte>.Slice()` 切片验证 CRC，全链路 0 次托管堆内存分配。\n- **特性四：模式匹配（Pattern Matching）**\n  - *实战*：使用 C# 8+ switch 表达式处理不同设备报警：\n    ```csharp\n    string message = alarm switch {\n        OverHeatAlarm h => $\"电机过热: {h.Temperature}℃\",\n        DisconnectAlarm => \"总线断开重连中\",\n        _ => \"未知报警\"\n    };\n    ```\n- **特性五：自定义特性（Attribute）与源生成器**\n  - *实战*：利用 CommunityToolkit.Mvvm 的 `[ObservableProperty]` 源生成器，在编译期自动生成 `INotifyPropertyChanged` 样板代码，兼顾代码极其简洁与零反射高性能。",
+    "practice": "在步态动力学上位机中，结合了特性与泛型构建了统一二进制协议序列化组件：对下位机结构体打上 `[StructLayout(LayoutKind.Sequential, Pack = 1)]` 特性，利用 `MemoryMarshal.Cast<byte, T>(span)` 实现纳秒级结构体与字节数组互转，单次数据包解析耗时小于 1 微秒，CPU 占用率忽略不计。",
+    "follow_ups": [
+      "Q: 为什么在工控通信方法中不要轻易使用反射遍历字段？（答：反射在每次调用时涉及元数据查找和类型检查，高频循环下性能极差；应在初始化时预热缓存委托，或改用编译期源生成器 Source Generator）"
+    ]
+  },
+  {
+    "id": "WPF-06",
+    "module": "WPF与工业桌面开发",
+    "stars": 3,
+    "tags": [
+      "跨平台桌面",
+      "Avalonia",
+      "多进程",
+      "IPC",
+      "StreamJsonRpc"
+    ],
+    "title": "C# 现代桌面端跨平台方案（Avalonia）与大型桌面客户端多进程 IPC 架构如何设计？",
+    "summary": "1. **Avalonia 跨平台优势**：基于 Skia 跨平台图形渲染引擎，拥有与 WPF 极其相似的 XAML 语法与 MVVM 体验，一套代码原生运行在 Windows、macOS、Linux（信创国产生态环境）以及 Android/iOS。\n2. **多进程架构核心价值**：将**不稳定易崩溃的第三方驱动（如老旧 C++ DLL）或极耗 CPU 的音视频编解码**剥离为独立的无界面后台进程，与主 UI 进程实现物理级容灾隔离。\n3. **IPC 通信选型**：进程间通信优先选择**命名管道（NamedPipe）**或本地 Socket，上层协议采用 **StreamJsonRpc** 或 **MessagePack** 实现强类型异步 RPC 调用。",
+    "detail": "### 1. Avalonia 与 WPF 核心对比\n| 维度 | WPF | Avalonia |\n| :--- | :--- | :--- |\n| **平台支持** | 仅限 Windows（依赖 Win32 / DirectX） | 真正的跨平台（Windows, macOS, Linux, WebAssembly） |\n| **底层渲染** | 基于 DirectX 9/11 合成 | 基于 Skia 跨平台 2D 渲染引擎 |\n| **样式系统** | 类似 CSS 简单的 Setter | 类似 CSS 的高级选择器系统（`:pointerover`） |\n| **架构兼容** | MVVM, INPC, ICommand | 100% 兼容 CommunityToolkit.Mvvm, ReactiveUI |\n\n### 2. 大型客户端多进程 IPC 架构落地\n```\n[主客户端进程 (WPF / Avalonia)]\n         ▲\n         │ (双向异步 RPC: StreamJsonRpc / 命名管道)\n         ▼\n[驱动与算法守护进程 (Console App / Background Worker)]\n         │ (P/Invoke 调用不稳定 C++ SDK)\n         ▼\n[第三方硬件 / 相机 / 仪器]\n```\n- 主进程通过 `Process.Start` 启动子进程并建立两端命名管道连接。\n- 子进程若发生非托管内存段错误（Crash），主进程捕获管道中断事件，弹窗提示并自动拉起重启子进程，主程序界面永不闪退。",
+    "practice": "在多通道综合测控系统中，某老旧光谱仪驱动 DLL 偶发内存访问越界导致宿主进程直接被操作系统终止。重构为多进程架构：单独编写了一个无界面的 Console 守护进程承载该驱动，主 WPF 界面通过命名管道使用 StreamJsonRpc 进行数据同步。系统上线后，即使该驱动偶发崩溃，主界面能在 1 秒内自动拉起子进程无缝恢复，整机 7x24 小时运行可用率达到 99.99%。",
+    "follow_ups": [
+      "Q: StreamJsonRpc 与 gRPC 相比有什么优势？（答：StreamJsonRpc 极其轻量，支持在双向 Stream 如命名管道上直接运行，无需依赖重量级的 HTTP/2 协议栈与证书配置，非常适合本机进程间通信）"
+    ]
   }
 ];
