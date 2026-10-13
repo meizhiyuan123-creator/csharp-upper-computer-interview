@@ -71,11 +71,31 @@ body {
   background-attachment: fixed;
 }
 
+/* 桌面端推挤式抽屉避让布局 (防止遮挡主内容) */
+@media (min-width: 900px) {
+  body {
+    padding-right: var(--ai-drawer-width, 0px);
+    transition: padding-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  body.ai-resizing {
+    transition: none !important;
+  }
+}
+
+/* 抽屉打开时隐藏悬浮按钮，避免重叠遮挡 */
+body.ai-drawer-open .ai-fab-btn {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.8);
+}
+
 /* 页面容器 */
 .app-container {
   max-width: 1280px;
   margin: 0 auto;
   padding: 24px 20px 80px;
+  transition: max-width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* 顶部 Header */

@@ -354,6 +354,18 @@
   let chatHistory = [];
   let isAiGenerating = false;
 
+  // 更新页面内容推挤避让宽度 (防止遮挡主内容)
+  function updateDrawerPush(isOpen) {
+    if (window.innerWidth >= 900 && isOpen) {
+      const curWidth = elAiDrawer ? (elAiDrawer.offsetWidth || 580) : 580;
+      document.documentElement.style.setProperty('--ai-drawer-width', `${curWidth}px`);
+      document.body.classList.add('ai-drawer-open');
+    } else {
+      document.documentElement.style.setProperty('--ai-drawer-width', '0px');
+      document.body.classList.remove('ai-drawer-open');
+    }
+  }
+
   // 侧边栏拖拽调宽交互
   if (elAiResizeHandle && elAiDrawer) {
     let isResizing = false;
@@ -365,6 +377,7 @@
       startX = e.clientX;
       startWidth = elAiDrawer.offsetWidth;
       elAiDrawer.classList.add('resizing');
+      document.body.classList.add('ai-resizing');
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
       e.preventDefault();
@@ -379,12 +392,18 @@
       const maxWidth = Math.min(window.innerWidth * 0.92, 1400);
       newWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
       elAiDrawer.style.width = `${newWidth}px`;
+      
+      // 桌面端同时动态推挤页面内容，完全避免遮挡
+      if (window.innerWidth >= 900) {
+        document.documentElement.style.setProperty('--ai-drawer-width', `${newWidth}px`);
+      }
     });
 
     window.addEventListener('mouseup', () => {
       if (isResizing) {
         isResizing = false;
         elAiDrawer.classList.remove('resizing');
+        document.body.classList.remove('ai-resizing');
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         try {
@@ -403,6 +422,13 @@
         }
       }
     } catch (_) {}
+
+    // 窗口尺寸变化时自适应推挤
+    window.addEventListener('resize', () => {
+      if (elAiDrawer && elAiDrawer.classList.contains('open')) {
+        updateDrawerPush(true);
+      }
+    });
   }
 
   // 读取已保存的 API 配置
@@ -437,16 +463,20 @@
     });
   }
 
-  // 切换抽屉显隐
+  // 切换抽屉显隐 (同时联动推挤页面主内容)
   function openAiDrawer() {
     if (elAiDrawer) {
       elAiDrawer.classList.add('open');
+      updateDrawerPush(true);
       if (elAiUserInput) elAiUserInput.focus();
     }
   }
 
   function closeAiDrawer() {
-    if (elAiDrawer) elAiDrawer.classList.remove('open');
+    if (elAiDrawer) {
+      elAiDrawer.classList.remove('open');
+      updateDrawerPush(false);
+    }
   }
 
   if (elAiFabBtn) elAiFabBtn.addEventListener('click', openAiDrawer);
