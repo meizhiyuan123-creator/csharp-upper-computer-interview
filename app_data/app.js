@@ -349,6 +349,7 @@
   const elAiUserInput = document.getElementById('aiUserInput');
   const elAiSendBtn = document.getElementById('aiSendBtn');
   const elAiResizeHandle = document.getElementById('aiResizeHandle');
+  const elAiBackdrop = document.getElementById('aiDrawerBackdrop');
 
   // 本地会话消息历史 (保存当前会话的上下文，最多保留最近 8 条避免超 token)
   let chatHistory = [];
@@ -366,13 +367,14 @@
     }
   }
 
-  // 侧边栏拖拽调宽交互
+  // 侧边栏拖拽调宽交互 (仅在桌面端有效)
   if (elAiResizeHandle && elAiDrawer) {
     let isResizing = false;
     let startX = 0;
     let startWidth = 0;
 
     elAiResizeHandle.addEventListener('mousedown', (e) => {
+      if (window.innerWidth <= 768) return; // 移动端禁用拉伸
       isResizing = true;
       startX = e.clientX;
       startWidth = elAiDrawer.offsetWidth;
@@ -385,7 +387,6 @@
 
     window.addEventListener('mousemove', (e) => {
       if (!isResizing) return;
-      // 抽屉贴在屏幕右边，向左拖增加宽度，向右拖缩小宽度
       const deltaX = startX - e.clientX;
       let newWidth = startWidth + deltaX;
       const minWidth = 360;
@@ -412,19 +413,30 @@
       }
     });
 
-    // 恢复历史宽度
-    try {
-      const savedWidth = localStorage.getItem('csharp_ai_drawer_width');
-      if (savedWidth && window.innerWidth > 640) {
-        const parsed = parseInt(savedWidth, 10);
-        if (!isNaN(parsed) && parsed >= 360) {
-          elAiDrawer.style.width = `${Math.min(parsed, window.innerWidth * 0.92)}px`;
-        }
+    // 恢复历史宽度 (移动端必须清空内联宽度，遵循 100vw)
+    function applyDrawerWidth() {
+      if (window.innerWidth > 768) {
+        try {
+          const savedWidth = localStorage.getItem('csharp_ai_drawer_width');
+          if (savedWidth) {
+            const parsed = parseInt(savedWidth, 10);
+            if (!isNaN(parsed) && parsed >= 360) {
+              elAiDrawer.style.width = `${Math.min(parsed, window.innerWidth * 0.92)}px`;
+              return;
+            }
+          }
+        } catch (_) {}
+        elAiDrawer.style.width = '580px';
+      } else {
+        elAiDrawer.style.width = ''; // 移动端清空内联样式
       }
-    } catch (_) {}
+    }
 
-    // 窗口尺寸变化时自适应推挤
+    applyDrawerWidth();
+
+    // 窗口尺寸变化时自适应
     window.addEventListener('resize', () => {
+      applyDrawerWidth();
       if (elAiDrawer && elAiDrawer.classList.contains('open')) {
         updateDrawerPush(true);
       }
@@ -463,10 +475,11 @@
     });
   }
 
-  // 切换抽屉显隐 (同时联动推挤页面主内容)
+  // 切换抽屉显隐 (同时联动推挤页面主内容与背景遮罩)
   function openAiDrawer() {
     if (elAiDrawer) {
       elAiDrawer.classList.add('open');
+      if (elAiBackdrop) elAiBackdrop.classList.add('visible');
       updateDrawerPush(true);
       if (elAiUserInput) elAiUserInput.focus();
     }
@@ -475,12 +488,14 @@
   function closeAiDrawer() {
     if (elAiDrawer) {
       elAiDrawer.classList.remove('open');
+      if (elAiBackdrop) elAiBackdrop.classList.remove('visible');
       updateDrawerPush(false);
     }
   }
 
   if (elAiFabBtn) elAiFabBtn.addEventListener('click', openAiDrawer);
   if (elAiCloseBtn) elAiCloseBtn.addEventListener('click', closeAiDrawer);
+  if (elAiBackdrop) elAiBackdrop.addEventListener('click', closeAiDrawer);
 
   if (elAiConfigToggleBtn) {
     elAiConfigToggleBtn.addEventListener('click', () => {
