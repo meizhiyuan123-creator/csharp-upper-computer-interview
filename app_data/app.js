@@ -7,9 +7,13 @@
   const STORAGE_KEY_STATUS = 'csharp_interview_question_status';
   const STORAGE_KEY_THEME = 'csharp_interview_theme';
 
+  const STORAGE_KEY_SORT = 'csharp_interview_sort_mode';
+
   let currentModule = 'ALL';
   let currentStars = 'ALL';
   let currentStatusFilter = 'ALL';
+  let currentTimeFilter = 'ALL';
+  let currentSortMode = localStorage.getItem(STORAGE_KEY_SORT) || 'LATEST'; // 默认最新优先！
   let searchQuery = '';
   let viewMode = 'flashcard'; // 'flashcard' (自测) | 'browse' (全部展开)
   
@@ -37,6 +41,8 @@
   const elModeFlashcard = document.getElementById('modeFlashcard');
   const elModeBrowse = document.getElementById('modeBrowse');
   const elToggleAllBtn = document.getElementById('toggleAllBtn');
+  const elTimeFilters = document.getElementById('timeFilters');
+  const elSortToggleBtn = document.getElementById('sortToggleBtn');
 
   // 初始化题库
   const questions = window.INTERVIEW_QUESTIONS || [];
@@ -85,6 +91,9 @@
       // 模块匹配
       if (currentModule !== 'ALL' && q.module !== currentModule) return false;
       
+      // 时间批次匹配
+      if (currentTimeFilter !== 'ALL' && q.date !== currentTimeFilter) return false;
+
       // 星级匹配
       if (currentStars !== 'ALL' && q.stars !== parseInt(currentStars)) return false;
       
@@ -111,7 +120,16 @@
 
   // 6. 渲染题目列表
   function renderQuestions() {
-    const list = getFilteredQuestions();
+    let list = getFilteredQuestions();
+
+    // 排序逻辑：最新添加优先 vs 默认题号排序
+    if (currentSortMode === 'LATEST') {
+      list = [...list].sort((a, b) => {
+        const dateDiff = (b.date || '').localeCompare(a.date || '');
+        if (dateDiff !== 0) return dateDiff;
+        return 0; // 维持原有顺序
+      });
+    }
 
     if (list.length === 0) {
       elQuestionList.innerHTML = `
@@ -131,6 +149,9 @@
       if (status === 'mastered') statusBadgeHtml = `<span class="status-badge mastered">✅ 已掌握</span>`;
       else if (status === 'review') statusBadgeHtml = `<span class="status-badge review">🤔 待复习</span>`;
       else if (status === 'urgent') statusBadgeHtml = `<span class="status-badge urgent">🔥 重点攻关</span>`;
+
+      let dateBadgeHtml = q.date ? `<span class="date-badge">📅 ${q.date}</span>` : '';
+      let newBadgeHtml = q.is_new ? `<span class="new-tag-badge">🔥最新</span>` : '';
 
       // 格式化 30秒提纲 Markdown 粗体
       const formattedSummary = q.summary.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -153,6 +174,8 @@
               <span class="id-badge">${q.id}</span>
               <span class="module-badge">${q.module}</span>
               <span class="stars-badge">${'⭐'.repeat(q.stars)}</span>
+              ${dateBadgeHtml}
+              ${newBadgeHtml}
               ${statusBadgeHtml}
             </div>
           </div>
@@ -246,6 +269,59 @@
     currentModule = tab.dataset.module;
     renderQuestions();
   });
+
+  // 9.5 时间批次与排序绑定
+  function updateSortBtnUI() {
+    if (!elSortToggleBtn) return;
+    if (currentSortMode === 'LATEST') {
+      elSortToggleBtn.textContent = '🕒 最新添加优先';
+      elSortToggleBtn.classList.add('active');
+    } else {
+      elSortToggleBtn.textContent = '🔢 默认题号排序';
+      elSortToggleBtn.classList.remove('active');
+    }
+  }
+
+  function updateTimeFilterCounts() {
+    if (!elTimeFilters) return;
+    const total = questions.length;
+    let count1014 = 0;
+    let count1012 = 0;
+    let countBase = 0;
+    questions.forEach(q => {
+      if (q.date === '2026-10-14') count1014++;
+      else if (q.date === '2026-10-12') count1012++;
+      else countBase++;
+    });
+
+    elTimeFilters.querySelectorAll('.filter-pill').forEach(btn => {
+      const t = btn.dataset.time;
+      if (t === 'ALL') btn.textContent = `全部时间 (${total})`;
+      else if (t === '2026-10-14') btn.textContent = `🔥 2026-10-14 硬核二面 (${count1014})`;
+      else if (t === '2026-10-12') btn.textContent = `💼 2026-10-12 桌面初面 (${count1012})`;
+      else if (t === '2026-10-10') btn.textContent = `🏛️ 核心经典底稿 (${countBase})`;
+    });
+  }
+
+  if (elTimeFilters) {
+    elTimeFilters.addEventListener('click', (e) => {
+      const btn = e.target.closest('.filter-pill');
+      if (!btn) return;
+      elTimeFilters.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentTimeFilter = btn.dataset.time;
+      renderQuestions();
+    });
+  }
+
+  if (elSortToggleBtn) {
+    elSortToggleBtn.addEventListener('click', () => {
+      currentSortMode = currentSortMode === 'LATEST' ? 'DEFAULT' : 'LATEST';
+      localStorage.setItem(STORAGE_KEY_SORT, currentSortMode);
+      updateSortBtnUI();
+      renderQuestions();
+    });
+  }
 
   // 10. 星级与状态筛选
   document.querySelectorAll('.star-filters .filter-pill').forEach(btn => {
@@ -778,6 +854,8 @@
 
   // 16. 初始化运行
   updateDashboard();
+  updateTimeFilterCounts();
+  updateSortBtnUI();
   renderQuestions();
 })();
 

@@ -17,7 +17,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: DispatcherPriority 各优先级怎么选？（答：常规更新用 Normal/Render，降频批量绘图用 Background/ContextIdle，避免抢占鼠标键盘交互）",
       "Q: 为什么不建议用 Control.CheckForIllegalCrossThreadCalls = false？（答：WinForms的粗暴开关破坏了线程安全，WPF根本不支持该属性，底层由DispatcherObject强校验）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "WPF-02",
@@ -36,7 +39,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: 为什么 ViewModel 中不能直接使用 DependencyProperty 代替 INPC？（答：DP 必须继承自 DependencyObject，这会导致 ViewModel 强依赖 WPF UI 库，无法做跨平台单元测试，且破坏了 MVVM 的纯洁性）",
       "Q: 如果 Binding 绑定的集合需要动态增删元素，使用普通 List 可以吗？（答：不行，必须使用 ObservableCollection<T>，其实现了 INotifyCollectionChanged 接口）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "WPF-03",
@@ -54,7 +60,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在三路工业相机同步采集系统中：相机 SDK 采用独立后台线程无锁环形队列（RingBuffer）拉取裸流，落盘线程通过 `System.Threading.Channels` 异步流式写入 SSD，而 UI 预览模块通过 `WriteableBitmap` 共享内存做降频渲染（例如 30FPS 刷新），将 CPU 占用从原先的 80%+ 骤降至 15% 以内，彻底告别掉帧与卡顿。",
     "follow_ups": [
       "Q: 海量测控实时动态波形（如 10 万点传感器曲线）在 WPF 中怎么画？（答：禁止使用 XAML Polyline 或 Canvas 频繁创建 Path，应使用专用高性能组件如 ScottPlot、SciChart，或者重写 OnRender 使用 DrawingContext.DrawLines 直连底层渲染流）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "WPF-04",
@@ -72,7 +81,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在多通道神经机电测控上位机中，设计了统一硬件抽象层（HAL）。通过 Prism 模块化机制，当现场从“3路相机单跑台”配置切换为“转棒疲劳仪+双路电刺激”配置时，只需替换配置文件加载的 Module DLL，核心业务架构代码完全无需修改复用率达 80% 以上。",
     "follow_ups": [
       "Q: RegionManager 的原理是什么？（答：在 View 中预留占位符 Region，由控制器动态将指定的 UserControl 导航/注入到该区域，实现界面的多视窗动态拼装）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "COMM-01",
@@ -90,7 +102,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在 RS485 设备通信模块中，针对 Modbus-RTU 这种依赖无传输字符间隔（3.5个字符时间）判帧的协议，若波特率为 115200，3.5T 仅约 0.35ms，操作系统线程调度抖动极易导致半包。实战方案是结合协议长度预判与自实现滑动窗口环形缓冲区（RingBuffer），收到后先根据功能码（如 0x03 读保持寄存器其返回长度为 3 + 字节计数 + 2 字节 CRC）动态计算预期整包长度，配合 CRC16 校验，实现了千万次通信 0 粘包 0 误判。",
     "follow_ups": [
       "Q: 为什么串口通信在大量干扰时不能只用 Try-Catch 忽略异常？（答：工业现场变频器或强电干扰会导致串行信号毛刺，丢弃会导致寄存器时序错乱，必须有 CRC 校验和重发机制）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "COMM-02",
@@ -109,7 +124,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: CRC16 查表法和直接移位计算法哪个好？（答：查表法以 512 字节空间换时间，微秒级完成，工控高频通信首选查表法）",
       "Q: 断线重连时，串口 Port.Open 容易卡死几秒怎么办？（答：必须将重连逻辑完全移到后台 Task 执行，禁止在 UI 主线程直接调用 serialPort.Open()）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "COMM-03",
@@ -127,7 +145,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在多通道机电综合测控上位机中，设计了 Modbus + OPC UA 双层架构：底层小型自研控制器采用 Modbus-RTU 快速直连，厂区西门子 S7-1500 PLC 与环境智能网关通过 OPC UA 对接。通过订阅 PLC 的报警节点，当出现急停或过载时毫秒级收到推送并触发上位机联锁停机，无需上位机耗费 CPU 循环轮询。",
     "follow_ups": [
       "Q: OPC UA 订阅的 PublishingInterval 和 SamplingInterval 有什么区别？（答：SamplingInterval 是服务器采样硬件寄存器的周期，PublishingInterval 是服务器向客户端批量推送更新包的周期）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "THR-01",
@@ -145,7 +166,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在步态动力学测控系统中，足底接触传感器以 500Hz 频率上报压力矩阵。采用单生产者单消费者的 `Channel.CreateBounded<SensorPacket>(1000)`，开启 `SingleWriter = true, SingleReader = true` 极致无锁优化模式。采集线程只管往 Channel `TryWrite`，后台单一后台 Task `await foreach` 批量异步写入 SQLite，即使系统突发卡顿也不会丢掉最新关键时序特征。",
     "follow_ups": [
       "Q: SingleWriter 和 SingleReader 设置为 true 有什么底层好处？（答：Channel 内部会切换为更加轻量高效的单线程无竞争队列实现，完全省去多线程争用时的锁与 CAS 开销）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "THR-02",
@@ -163,7 +187,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在工业设备运行期间，上位机 7x24 小时无人值守。曾有工程师在设备断线重连后台方法中写了 `private async void ReconnectLoop()`，当现场网线被拔出抛出 `SocketException` 时，由于没有返回 Task 托管，该异常直接打穿全局未捕获异常管道导致整个上位机软件瞬间闪退，酿成生产事故。规范做法：必须返回 `async Task` 并由顶层统筹捕获与重试。",
     "follow_ups": [
       "Q: ConfigureAwait(false) 的作用是什么？在上位机何时使用？（答：通知调度器在后续恢复时不强求返回原来的 SynchronizationContext，在编写底层驱动、通信库、算法运算等与 UI 无关的代码时应全部加上，避免不必要地切回 UI 线程造成线程饥饿）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "THR-03",
@@ -181,7 +208,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在上位机串口通信层：发送指令是 `async Task<byte[]> SendAsync()` 异步方法，由于内部需要 `await Task.Delay` 等待下位机应答，**绝对不能用 `lock`**，此时必须使用 `private readonly SemaphoreSlim _serialLock = new(1, 1);`，通过 `await _serialLock.WaitAsync(); try { ... } finally { _serialLock.Release(); }` 实现完美的异步串行化互斥。",
     "follow_ups": [
       "Q: lock(this) 和 lock(typeof(MyClass)) 为什么是反模式？（答：this 和类型对象都可能被外部代码访问到，如果外部也 lock 了同一个对象，容易引发不可预知的全局死锁，必须使用 private readonly object _locker = new();）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "CLR-01",
@@ -200,7 +230,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: 什么是弱引用（WeakReference）？（答：允许对象被引用的同时，不阻止该对象被 GC 回收；常用于缓存和解耦事件监听）",
       "Q: GC.Collect() 应该在代码中主动调用吗？（答：常规情况下严禁手动调用，会破坏 GC 自身的代际自我调优模型；仅在极特殊场景如刚关闭了一个占用 1GB 内存的庞大独立分析模块且即将开始实时测控时，才在后台低优先级触发）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "CLR-02",
@@ -218,7 +251,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在海康相机高速采集（120 FPS）和传感器高速数据流解析模块中：原始数据包到达后直接封装为 `ReadOnlyMemory<byte>`，通过 Channel 异步发给算法分析模块，在分析内部切片解析使用 `ReadOnlySpan<byte>`。结合 `ArrayPool<byte>.Shared`，整个数据链路从采集到落盘做到“全程零内存分配（Zero Allocation）”，GC 暂停时间降至微秒级。",
     "follow_ups": [
       "Q: 为什么 ref struct Span<T> 不能被装箱，也不能作为 async 方法的参数？（答：因为 ref struct 必须保证生命周期严格在线程栈上，若装箱到托管堆或被 async 状态机类捕获，指针可能悬空指向失效的栈内存，引发内存安全问题）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "CLR-03",
@@ -236,7 +272,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在海康相机 C# SDK 二次开发中：相机的采集流、曝光控制句柄都是基于 C++ 原生动态库分配的系统资源。必须严格实现标准 `IDisposable`，并在系统关闭或相机重连时显式释放；同时在构造 `Dispose` 时执行 `GC.SuppressFinalize(this)`，避免让短命的驱动包装对象流落到高成本的 Finalizer 终结队列中。",
     "follow_ups": [
       "Q: 为什么重写了析构函数（~ClassName）的对象会在 GC 时多存活一代？（答：GC 发现带终结器的对象死亡时，不会立刻回收它，而是将其挂入 Finalization Queue，等到下一轮 GC 由专用 Finalizer 线程执行析构后才能真正释放其内存）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "VIS-01",
@@ -254,7 +293,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在智能步态动力学测控系统中，搭载 3 路高速工业相机同步 120 FPS 采集。早期版本在相机回调里直接转 Bitmap 赋给 WPF 界面，导致 CPU 占用率 90% 且每 10 秒丢 5 帧。重构后：独立封装海康 SDK 采集管线，后台线程通过固定预分配内存缓冲队列接流，录像落盘走异步后台线程写入 NVMe SSD，WPF 端基于 WriteableBitmap 做 30Hz 抽帧同步预览，最终实现连续 3 小时录制 0 丢帧，CPU 占用稳定在 20% 以下。",
     "follow_ups": [
       "Q: 软触发（Software Trigger）与硬外触发（Hardware External Trigger）有何区别？（答：软触发通过上位机下发指令，受网络与系统调度延迟影响有几毫秒抖动；硬触发通过传感器光电信号接相机 GPIO 引脚，纳秒/微秒级响应，多相机高精度同步必须使用硬外触发）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "VIS-02",
@@ -272,7 +314,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在上位机与硬件加密狗及工业算法 C++ DLL 交互中：通过 `[DllImport(\"HardwareDog.dll\", CallingConvention = CallingConvention.Cdecl)]` 调用原生接口。严格指定结构体 `Pack = 1` 并在数据传输完毕后显式通过 `Marshal.FreeHGlobal` 释放申请的非托管内存，杜绝了底层句柄与内存泄露风险。",
     "follow_ups": [
       "Q: CallingConvention.Cdecl 与 StdCall 有什么区别？（答：Cdecl 由调用者清理栈，支持可变参数，C/C++默认；StdCall 由被调用者清理栈，Windows API常用，若约定不匹配会导致调用堆栈不平衡崩溃）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "VIS-03",
@@ -290,7 +335,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在小动物步态接触面分析中：采集到的侧视与底视灰度图像经 HSV 动态分割和形态学闭运算提取足底轮廓。通过复用两个全局工作 `Mat` 缓冲区进行连通域分析（`ConnectedComponentsWithStats`），消除了中间临时对象的反复分配，足印实时跟踪分析耗时稳定在 4ms 以内，满足 120 FPS 准实时分析要求。",
     "follow_ups": [
       "Q: OpenCvSharp 中的 using 语句块在循环中大量出现会导致性能变慢吗？（答：不会，using 编译后是 try-finally 调用 Dispose()，只是调用原生 cvReleaseImage 清理指针，比等待 GC 回收高效得多）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "CS-01",
@@ -308,7 +356,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在步态测控系统的传感器数据管道中，定义了传感器时序数据：\n```csharp\n[StructLayout(LayoutKind.Sequential, Pack = 1)]\npublic readonly struct SensorDataPacket {\n    public readonly long Timestamp;\n    public readonly float ForceX;\n    public readonly float ForceY;\n    public readonly float ForceZ;\n}\n```\n该结构体每秒产生 1000 个实例，通过只读传递直接流转，全生命周期 0 次堆内存分配，完全不给 GC 增加任何负担。",
     "follow_ups": [
       "Q: 什么是 readonly struct？有何优化效果？（答：告知编译器其所有字段均不可变，当使用 in 关键字传参时，编译器无需为其创建防御性副本 Defensive Copy，显著提升只读传递性能）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "CS-02",
@@ -326,7 +377,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在工控设备驱动开发中：设备状态变更、报警事件均严格声明为 `public event EventHandler<AlarmArgs> DeviceAlarmed`，外部业务模块只能挂载监听，不能从外部伪造触发报警。对于需要频繁开闭的临时诊断浮窗，使用 `WeakEventManager<TSource, TEventArgs>.AddHandler` 订阅设备单例事件，彻底免除弹窗忘记注销导致的内存泄漏隐患。",
     "follow_ups": [
       "Q: 委托调用的执行顺序是怎样的？如果链条中一个方法抛出异常会怎样？（答：按订阅顺序同步依次执行；若其中一个抛出异常且未被内部捕获，调用链会中断，后续方法将不会被执行；若需保证全部执行，需通过 GetInvocationList() 遍历并独立 try-catch 调用）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "CS-03",
@@ -344,7 +398,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "上位机调试串口与工业总线数据监听窗口：当下位机高频打印 Hex 报文时，如果用 `textBox.Text += hexStr` 会瞬间卡死界面。标准架构：后台用 `StringBuilder` 维护最新环形日志缓冲区，配合定时器或限频刷新器一次性批量赋值更新，保证流畅度。",
     "follow_ups": [
       "Q: string.Intern() 和 string.IsInterned() 的作用？（答：手动将运行时动态生成的字符串放入驻留池或查询是否存在，用于海量重复字典字符串的去重优化）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "CLASSIC-01",
@@ -362,7 +419,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在多轴运动控制联动中，X 轴与 Y 轴拥有各自的硬件互斥锁。为防止插补计算与原点回归两组并发线程出现反向死锁，规定所有跨轴联动操作必须按“X轴 -> Y轴 -> Z轴”的字母表固定顺序申请资源，从数学逻辑上彻底斩断了形成环路等待的可能性。",
     "follow_ups": [
       "Q: 银行家算法的基本原理是什么？（答：一种避免死锁的动态资源分配算法，在分配前试探分配后系统是否依然处于安全状态，若是才真正分配，否则让进程等待）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "CLASSIC-02",
@@ -379,7 +439,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在上位机系统中，主程序负责测控与 UI 显示；针对某老旧分析仪不稳定的第三方驱动，单独编写了一个无界面的 Console 辅助进程进行托管，二者通过命名管道进行高速二进制通信。即使第三方驱动偶发崩溃，主上位机不仅不会闪退，还能自动检测并拉起重启该辅助进程，实现了工业级的容灾弹性。",
     "follow_ups": [
       "Q: 什么是纤程（Fiber）与协程？C# 的 async/await 和线程是什么关系？（答：async/await 是语言级协程/用户态调度，并不等同于创建新线程，是在少量线程池线程之间复用 CPU）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "CLASSIC-03",
@@ -397,7 +460,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在硬件抽象层（HAL）设计中，定义了抽象基类 `DeviceControllerBase`，声明虚方法 `public virtual async Task InitializeAsync()`。不同硬件子类（如 `SerialMotorController` 和 `TcpMotorController`）统一使用 `override` 重写。上层业务以基类指针统一调度启动流程，完美发挥多态优势。",
     "follow_ups": [
       "Q: 抽象类（abstract）和接口（interface）在多态设计上如何选择？（答：IS-A 强血缘关系且需共享部分通用实现时用抽象类；CAN-DO 能力契约或多实现多重继承时用接口）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "CLASSIC-04",
@@ -415,7 +481,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在 3 路工业相机测控系统中，千兆网相机取流底层基于 GigE Vision 协议（基于 UDP 构建），即使网络偶发闪烁也保证 120 FPS 采集不发生队头阻塞；而向 PLC 下发跑台速度设定值与安全互锁信号时，严格采用 TCP 上的 Modbus-TCP 协议，确保每一条关键指令都被确认识别。",
     "follow_ups": [
       "Q: TCP 粘包问题在 UDP 中存在吗？（答：不存在！UDP 是面向报文的，操作系统会完整保留发送端的数据边界，每次 recvfrom 读到的就是一整个完整的数据报）"
-    ]
+    ],
+    "date": "2026-10-10",
+    "batch": "核心经典底稿",
+    "is_new": false
   },
   {
     "id": "VIS-04",
@@ -435,7 +504,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: 各厂商相机的像素格式（PixelFormat）枚举和命名差异如何消除？（答：在 HAL 层定义统一的标准像素格式枚举，各驱动在接收到原始回调帧后通过预建映射表转译，或驱动层提供统一转 Bgr24 的无锁快速转换）",
       "Q: 软触发与硬触发的调用逻辑在接口层如何通用？（答：在 ICamera 统一暴露 TriggerMode 属性与 TriggerSoftware() 方法，底层海康调用 MV_CC_SetTriggerMode / MV_CC_TriggerSoftware，大华调用 CameraSetTriggerMode / CameraSoftTrigger）"
-    ]
+    ],
+    "date": "2026-10-12",
+    "batch": "2026-10-12 桌面端初面",
+    "is_new": false
   },
   {
     "id": "WPF-05",
@@ -455,7 +527,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: MVVM 模式中，ViewModel 如何在不直接引用 View 的前提下通知弹窗或关闭窗口？（答：通过抽象的 IDialogService 弹窗服务接口注入，或者利用 Prism 的 EventAggregator / CommunityToolkit.Mvvm 的 WeakReferenceMessenger 发送跨模块通知）",
       "Q: 为什么不能为了省事在 ViewModel 里调用 this.FindName(\"controlName\")？（答：这样破坏了 ViewModel 不依赖 View 的核心契约，使得 ViewModel 无法在无界面的单元测试环境中运行，退化为了 Code-Behind 坏味道）"
-    ]
+    ],
+    "date": "2026-10-12",
+    "batch": "2026-10-12 桌面端初面",
+    "is_new": false
   },
   {
     "id": "CS-04",
@@ -475,7 +550,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在步态动力学上位机中，结合了特性与泛型构建了统一二进制协议序列化组件：对下位机结构体打上 `[StructLayout(LayoutKind.Sequential, Pack = 1)]` 特性，利用 `MemoryMarshal.Cast<byte, T>(span)` 实现纳秒级结构体与字节数组互转，单次数据包解析耗时小于 1 微秒，CPU 占用率忽略不计。",
     "follow_ups": [
       "Q: 为什么在工控通信方法中不要轻易使用反射遍历字段？（答：反射在每次调用时涉及元数据查找和类型检查，高频循环下性能极差；应在初始化时预热缓存委托，或改用编译期源生成器 Source Generator）"
-    ]
+    ],
+    "date": "2026-10-12",
+    "batch": "2026-10-12 桌面端初面",
+    "is_new": false
   },
   {
     "id": "WPF-06",
@@ -494,7 +572,10 @@ window.INTERVIEW_QUESTIONS = [
     "practice": "在多通道综合测控系统中，某老旧光谱仪驱动 DLL 偶发内存访问越界导致宿主进程直接被操作系统终止。重构为多进程架构：单独编写了一个无界面的 Console 守护进程承载该驱动，主 WPF 界面通过命名管道使用 StreamJsonRpc 进行数据同步。系统上线后，即使该驱动偶发崩溃，主界面能在 1 秒内自动拉起子进程无缝恢复，整机 7x24 小时运行可用率达到 99.99%。",
     "follow_ups": [
       "Q: StreamJsonRpc 与 gRPC 相比有什么优势？（答：StreamJsonRpc 极其轻量，支持在双向 Stream 如命名管道上直接运行，无需依赖重量级的 HTTP/2 协议栈与证书配置，非常适合本机进程间通信）"
-    ]
+    ],
+    "date": "2026-10-12",
+    "batch": "2026-10-12 桌面端初面",
+    "is_new": false
   },
   {
     "id": "COMM-04",
@@ -513,7 +594,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: 如果下位机高频点位偶尔响应超时，低频点位会被一直饿死吗？（答：不会，每次问询设置严格超时 15ms，超时立即跳过当前时隙，不阻塞后续节拍递增）",
       "Q: 为什么不能直接为高频和低频各开一个后台线程？（答：RS485 硬件物理层是半双工差分信号，两个线程同时向串口发送字节流会在总线上发生电平冲突叠加，下位机只能收到乱码校验错误）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "COMM-05",
@@ -533,7 +617,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: 写控制指令（如电机启动/停止）也能用 DropOldest 丢弃吗？（答：绝不可以！周期读可以丢，但关键写指令必须通过 TaskCompletionSource 保留并保证可靠送达，若彻底超时必须向上抛出硬件异常提示操作员）",
       "Q: 串口 SerialPort 在断开后直接调用 Open() 为什么有时会卡住几秒？（答：Win32 底层在释放串口句柄或等待驱动 I/O 取消时会有阻塞，必须在后台 Task 异步执行并配合 CancellationToken 控制等待）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "COMM-06",
@@ -553,7 +640,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: Modbus-RTU 报文里的从机地址最大是多少？（答：从机地址范围 1~247，0 是广播地址，从机不回传响应）",
       "Q: 为什么 Modbus-RTU 经常使用 3.5 字符时间分包但在高速波特率下容易误判？（答：波特率 115200 下 3.5T 仅约 0.35ms，操作系统线程调度抖动动辄几毫秒，单靠时间间隔判帧极易误切包，必须结合功能码与长度域进行状态机预判）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "COMM-07",
@@ -573,7 +663,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: Modbus 一次性最多能读多少个保持寄存器？（答：根据协议规范，数据域字节数最大 250 字节，故一次最多读取 125 个寄存器）",
       "Q: 读离散线圈 0x01 与读保持寄存器 0x03 为什么不能混在一个包里？（答：Modbus 功能码与寄存器区域是一对一的，不同区域的地址映射不同，必须分开发起问询）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "VIS-05",
@@ -593,7 +686,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: 若其中一台相机偶然丢了一帧，聚合器会导致后续所有帧都卡死等待吗？（答：不会，聚合器挂载定时清理定时器，超过 20ms 未收齐的帧组被标记为缺陷帧强制清理，绝不阻塞后续帧）",
       "Q: 硬件外触发的信号线如果长达 10 米，如何防止现场强电磁干扰？（答：必须采用带屏蔽层的双绞线，使用高速光耦隔离，并选用差分信号驱动器如 RS422 电平传输）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "VIS-06",
@@ -613,7 +709,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: PTP 同步中 Master 相机是怎么选出来的？（答：通过最佳主时钟算法 BMCA 自动竞选，或上位机指定网卡/主相机为固定 Master）",
       "Q: 什么是 GigE Vision 的 Action Command？（答：由上位机向局域网广播一条特制 UDP 报文，所有收到该指令的相机在约定的相同时钟时刻同步开始曝光）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "VIS-07",
@@ -633,7 +732,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: 为什么不开巨型帧会导致 CPU 占用极高并丢帧？（答：1500 字节下每秒中断数十万次，操作系统上下文切换打爆 CPU；开启 9000 字节后中断次数锐减 80%，网络吞吐大幅稳定）",
       "Q: 采集回调线程中可以直接调用 OpenCV 的 cvtColor 吗？（答：绝对不可以！图像转换耗时几毫秒，会直接把 SDK 内部接收环形缓冲区撑爆导致驱动底层直接丢帧，必须异步抛出到工作队列处理）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "VIS-08",
@@ -653,7 +755,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: 离线视频采用有损压缩（如 H.264）会对算法精度有影响吗？（答：有影响，工业与科研级图像应采用无损编码如 FFmpeg FFV1、Raw 裸流或高质量 MJPEG，防止压缩伪影干扰亚像素边缘提取）",
       "Q: 录像落盘时如果磁盘 I/O 偶发被操作系统卡死怎么办？（答：落盘队列设计 2~4GB 的内存突发写缓冲池，能够吸收操作系统几秒钟的 I/O 挂起抖动）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "VIS-09",
@@ -674,7 +779,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: 帧错乱（Frame Disordering）通常是什么原因？（答：多相机采集时未按硬件 FrameID 严格校验，或者后台多线程并发消费队列时未维护顺序；必须通过硬件 FrameID 单调递增校验或单线程消费）",
       "Q: 海康 SDK 中的 GevSCPD 参数代表什么含义？（答：Stream Channel Packet Delay，即相机发送每个 UDP 数据包之间的微秒间隔，调大该参数可降低交换机瞬间拥塞丢包，但会轻微降低最大帧率上限）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "VIS-10",
@@ -695,7 +803,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: C# 中 ONNX Runtime 如何使用 GPU 加速？（答：引入 Microsoft.ML.OnnxRuntime.Gpu，在 SessionOptions 中配置 AppendExecutionProvider_CUDA 或 AppendExecutionProvider_Dml 使用 DirectML）",
       "Q: 共享内存如何通知子进程有新帧到来？（答：使用跨进程具名 EventWaitHandle 事件量，主进程写完触发 Set()，子进程 WaitOne() 唤醒读取，延迟在 10 微秒以内）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "VIS-11",
@@ -716,7 +827,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: Mat 的 SubMat/ROI 操作如果释放了原 Mat 会怎样？（答：内部有引用计数器，但若使用底层指针直接操作可能发生悬空野指针，必须保证原图生命周期覆盖 ROI 使用周期）",
       "Q: OpenCvSharp 中的 Parallel.For 和 Cv2.SetNumThreads 有何区别？（答：Cv2.SetNumThreads 控制 OpenCV 内部 C++ 底层算子多线程并行，Parallel.For 是 C# 托管层多图并发；对于高帧率图像通常采用单张图单核流水线处理，避免多核切分的小开销）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "VIS-12",
@@ -737,7 +851,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: DLC 输出热图（Heatmap）和坐标怎么转换的？（答：DLC 输出每个关键点的置信度热力图，通过取热图最大响应峰值 argmax 并结合局部高斯插值得到亚像素级别的精准坐标）",
       "Q: 为什么工控/科研中骨骼点检测容易在反光金属表面失效？（答：镜面反射破坏了特征梯度，除了算法层增加反光数据增强外，现场最有效的做法是在光源前加偏振镜并在工业镜头加装正交偏振片消除高光）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "VIS-13",
@@ -758,7 +875,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: WriteableBitmap 在高刷新率下会产生撕裂吗？（答：不会，WriteableBitmap 的 Lock/Unlock 与 AddDirtyRect 深度整合在 WPF 的 DirectX 双缓冲渲染管线中，由 DWM 窗口桌面管理器统一进行垂直同步同步合成）",
       "Q: 如果 Mat 是单通道灰度图，WPF 怎么显示？（答：WPF WriteableBitmap 格式指定为 PixelFormats.Gray8，无需转换为三通道，节约 66% 显存带宽）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "WPF-07",
@@ -779,7 +899,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: Prism 的 PubSubEvent 订阅时，ThreadOption 有哪几种？（答：PublisherThread 发布者同线程、UIThread 自动调度到主 UI 线程、BackgroundThread 线程池异步执行；工控界面更新必须指定 ThreadOption.UIThread）",
       "Q: Prism 的 ViewModelLocator 是如何找到对应的 ViewModel 的？（答：默认通过命名约定规则，将 Views.FooView 映射为 ViewModels.FooViewModel 并通过 DI 容器自动解析注入）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "WPF-08",
@@ -800,7 +923,10 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: 为什么工业上位机不推崇过度使用微服务，而更推荐单机多进程？（答：单机多进程既能实现物理崩溃隔离，又能利用本地共享内存达到微秒级低延迟，避免网络微服务带来的序列化开销与复杂网络拓扑运维成本）",
       "Q: 在 HAL 硬件抽象中，如何处理不同设备专有的高级特性（如海康相机的超清无损算法）？（答：采用特性查询模式或扩展接口模式，如 ((IHikExtension)camera)?.EnableSuperResolution()，不污染基础 ICamera 抽象接口）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   },
   {
     "id": "WPF-09",
@@ -821,6 +947,9 @@ window.INTERVIEW_QUESTIONS = [
     "follow_ups": [
       "Q: MVVM 模式下，自定义绘图控件（如足底压力热力图）如何与 ViewModel 高效交互？（答：不要用海量小控件做 Binding，而是在控件内暴露单个依赖属性绑定后，重写控件的 OnRender 使用 DrawingContext 直接绘制，将性能提升百倍）",
       "Q: 密码输入框 PasswordBox 为什么不支持直接 Text 绑定？在 MVVM 中如何安全处理？（答：PasswordBox 出于安全考虑不将明文暴露为依赖属性，工控安全做法是使用附加属性绑定 SecureString，或者在登录命令执行时通过参数 CommandParameter 传递密码控件自身）"
-    ]
+    ],
+    "date": "2026-10-14",
+    "batch": "2026-10-14 硬核实战二面",
+    "is_new": true
   }
 ];

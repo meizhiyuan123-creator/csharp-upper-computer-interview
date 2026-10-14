@@ -367,6 +367,113 @@ body.ai-drawer-open .ai-fab-btn {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
+/* 时间批次行与排序开关 */
+.time-filter-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px dashed var(--border-color);
+}
+
+.time-filters {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-pill.new-pill {
+  border-color: rgba(255, 107, 107, 0.4);
+  color: #ff6b6b;
+}
+
+.filter-pill.new-pill:hover {
+  background: rgba(255, 107, 107, 0.15);
+  border-color: #ff6b6b;
+}
+
+.filter-pill.new-pill.active {
+  background: linear-gradient(135deg, rgba(255, 107, 107, 0.25), rgba(238, 90, 82, 0.25));
+  color: #ff6b6b;
+  border-color: #ff6b6b;
+  box-shadow: 0 0 10px rgba(255, 107, 107, 0.25);
+}
+
+.sort-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sort-toggle-btn {
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sort-toggle-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-blue);
+}
+
+.sort-toggle-btn.active {
+  background: rgba(0, 112, 243, 0.15);
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
+.date-badge {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+[data-theme="light"] .date-badge {
+  background: rgba(0, 0, 0, 0.05);
+  color: #4b5563;
+  border-color: #e5e7eb;
+}
+
+.new-tag-badge {
+  background: linear-gradient(135deg, #ff4d4f, #ff7875);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  letter-spacing: 0.5px;
+  animation: pulseGlow 2s infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 77, 79, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(255, 77, 79, 0);
+  }
+}
+
+
 /* 题目卡片列表 */
 .question-list {
   display: flex;

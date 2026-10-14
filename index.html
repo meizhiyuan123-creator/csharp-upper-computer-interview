@@ -89,6 +89,21 @@
         <button class="filter-tab" data-module="经典题与历史归档">📚 经典题归档</button>
       </div>
 
+      <!-- 时间批次与排序栏 -->
+      <div class="time-filter-row">
+        <div class="time-filters" id="timeFilters">
+          <span style="font-size: 12px; color: var(--text-muted); margin-right: 4px;">📅 时间批次:</span>
+          <button class="filter-pill active" data-time="ALL">全部时间 (43)</button>
+          <button class="filter-pill new-pill" data-time="2026-10-14">🔥 2026-10-14 硬核二面 (16)</button>
+          <button class="filter-pill" data-time="2026-10-12">💼 2026-10-12 桌面初面 (4)</button>
+          <button class="filter-pill" data-time="2026-10-10">🏛️ 核心经典底稿 (23)</button>
+        </div>
+        <div class="sort-selector">
+          <span style="font-size: 12px; color: var(--text-muted); margin-right: 4px;">排序:</span>
+          <button id="sortToggleBtn" class="sort-toggle-btn active" title="点击切换：最新添加优先 / 默认题号排序">🕒 最新添加优先</button>
+        </div>
+      </div>
+
       <!-- 星级与状态细化筛选 -->
       <div class="sub-filter-row">
         <div class="star-filters">
