@@ -1,6 +1,6 @@
 # WPF与工业桌面开发 · 上位机核心面试题库
 
-> 本模块共收录 **6** 道上位机核心考点。严格遵循《C#上位机知识库准录与评估规范》编制。
+> 本模块共收录 **9** 道上位机核心考点。严格遵循《C#上位机知识库准录与评估规范》编制。
 
 ---
 
@@ -211,3 +211,107 @@ WPF 几乎所有控件都继承自 `DispatcherObject`。其内部维护了一个
 - Q: StreamJsonRpc 与 gRPC 相比有什么优势？（答：StreamJsonRpc 极其轻量，支持在双向 Stream 如命名管道上直接运行，无需依赖重量级的 HTTP/2 协议栈与证书配置，非常适合本机进程间通信）
 
 ---
+
+## 7. Prism 框架在大型工控上位机系统中的工程落地心得与“事件地狱”避坑实战
+
+- **题目标识**：`WPF-07`
+- **重要程度**：⭐⭐⭐⭐⭐ (5星)
+- **核心标签**：`Prism` `EventAggregator` `弱引用` `事件地狱` `模块化通信`
+
+### 💡 30秒速记提纲（面试张口就来）
+> 1. **核心价值三要点**：模块化动态注册（`IModule`）、区域解耦动态装配（`RegionManager`）、以及基于弱引用的事件总线（`EventAggregator`）。
+> 2. **弱引用防泄漏本质**：传统 .NET 事件强引用订阅者容易引发内存泄漏，Prism 的 `PubSubEvent` 内部基于 `WeakReference` 维护订阅列表，ViewModel 销毁时无需手动注销也不会引发泄漏。
+> 3. **避坑与反思（治理事件地狱）**：严禁把 EventAggregator 当作全能共享数据中枢！过度使用会导致“发散式通信、调用链断裂、难以断点排查”。**原则：数据共享走单例服务（State Service）直接注入，唯有跨模块单向通知（如急停广播、主题切换）才走 EventAggregator**。
+
+### 🔍 深入原理解析
+### 1. 经典“事件地狱”坏味道 vs 正确治理
+- **错误坏味道（事件满天飞）**：
+  `ViewModelA` 发布 `MotorSpeedChangedEvent`，`ViewModelB` 订阅后修改参数再发布 `PidAdjustEvent`，`ViewModelC` 再次转发... 导致出现环形依赖与不可预料的并发竞争时序。
+- **最佳治理范式**：
+  建立统一的 `IMotionStateService`（单例状态机），所有轴状态集中管理并暴露响应式属性。EventAggregator 仅保留极少数系统级全局事件：`EmergencyStopEvent`、`UserLoginChangedEvent`。
+
+### 🛠️ 上位机实战避坑（工程案例）
+在步态测控上位机研发初期，开发团队滥用 EventAggregator 进行相机帧、Modbus 采集点位与跑台速度的跨模块通知，导致每秒触发上千次事件分发，主线程频繁切入卡顿且难以单步 Debug。技术负责人执行架构治理：将高频数据流收归到专用的 `GaitDataStreamService` 响应式数据流服务中，仅保留“急停硬件联锁”走事件聚合器广播，系统架构瞬间清爽，消息吞吐延迟从 40ms 降至 2ms。
+
+### ⚠️ 常见连环追问
+- Q: Prism 的 PubSubEvent 订阅时，ThreadOption 有哪几种？（答：PublisherThread 发布者同线程、UIThread 自动调度到主 UI 线程、BackgroundThread 线程池异步执行；工控界面更新必须指定 ThreadOption.UIThread）
+
+---
+
+## 8. 步态测控/工业上位机系统架构重构反思：硬件隔离、反应式流处理与配置驱动设计
+
+- **题目标识**：`WPF-08`
+- **重要程度**：⭐⭐⭐⭐⭐ (5星)
+- **核心标签**：`架构重构` `多进程硬件隔离` `反应式编程Rx` `配置驱动` `HAL`
+
+### 💡 30秒速记提纲（面试张口就来）
+> 1. **反思一：硬件与算法的“物理级多进程隔离”**：老架构将海康相机 C++ SDK、Python AI 推理全部塞在主 WPF 进程中，第三方非托管底层崩溃直接导致主软件闪退。重构必须将不稳定硬件驱动和高算力算法独立为守护进程，通过共享内存与命名管道进行 IPC 通信，主程序永远稳健运行。
+> 2. **反思二：引入反应式编程（System.Reactive / Rx）**：步态传感器、足底压力、相机时间戳本质上是高速“事件流”。老架构手工维护大量的并发队列与锁，代码臃肿；重构采用 Rx 的 `Sample`（降频采样）、`Buffer`（批量聚合）、`CombineLatest`（多源数据对齐），使数据流管线声明式极简。
+> 3. **反思三：配置驱动型硬件抽象（HAL）**：将具体厂商（海康/大华）和 PLC 寄存器地址从业务逻辑中彻底解耦，通过 JSON 拓扑配置 + DI 容器装配，实现现场换硬件 0 代码改动。
+
+### 🔍 深入原理解析
+### 1. 现代化工业上位机重构拓扑
+```
+┌────────────────────────────────────────────────────────┐
+│               主界面展示层 (WPF / MVVM)                 │
+│         - Prism 模块化 UI, WriteableBitmap 预览         │
+└───────────────────────────▲────────────────────────────┘
+                            │ (NamedPipe 异步 RPC + 共享内存)
+┌───────────────────────────▼────────────────────────────┐
+│          守护与驱动中枢进程 (Background Worker)          │
+│   ┌────────────────────────────────────────────────┐   │
+│   │   统一硬件抽象层 (HAL): ICamera / IMotion      │   │
+│   └────────────────────────────────────────────────┘   │
+│         │ (Rx 流式合并)              │ (P/Invoke)       │
+│         ▼                           ▼                   │
+│   [AI ONNX 算法引擎]          [海康 / 大华 / 伺服]     │
+└────────────────────────────────────────────────────────┘
+```
+
+### 🛠️ 上位机实战避坑（工程案例）
+在步态测控系统重构中，通过将“多路相机同步采集与落盘”剥离为独立运行的 Console 后台服务，主 WPF 仅作为监控客户端连接。在一次实验中，某相机固件因高温触发断线重连异常，若在老架构下主程序早已闪退，而在新架构下主界面仅弹窗提示“左侧相机离线”，后台驱动进程自动执行 3 次无感重连并恢复，实验数据丝毫无损。
+
+### ⚠️ 常见连环追问
+- Q: 为什么工业上位机不推崇过度使用微服务，而更推荐单机多进程？（答：单机多进程既能实现物理崩溃隔离，又能利用本地共享内存达到微秒级低延迟，避免网络微服务带来的序列化开销与复杂网络拓扑运维成本）
+
+---
+
+## 9. MVVM 架构在工控上位机落地中的三大深水区痛点：高频数据刷新、多层模态弹窗与生命周期内存泄漏
+
+- **题目标识**：`WPF-09`
+- **重要程度**：⭐⭐⭐⭐⭐ (5星)
+- **核心标签**：`MVVM落地痛点` `高频数据刷新` `工控弹窗抽象` `生命周期管理` `性能瓶颈`
+
+### 💡 30秒速记提纲（面试张口就来）
+> 1. **痛点一：高频数据流与 Binding 机制的性能冲突**：百赫兹传感器若每次都触发 `PropertyChanged`，WPF 属性反射与消息泵立即卡死。解法：ViewModel 内部做缓冲分频，数据采集归采集，UI 通知定时 30Hz 批量打包推送。
+> 2. **痛点二：多层工控模态弹窗与生命周期解耦**：ViewModel 不持有 View，但工控现场频繁需要急停确认、参数超限、回零交互弹窗。解法：抽象出 `IDialogService` 接口通过 DI 注入，异步返回结果 `var res = await _dialog.ShowConfirmAsync(...)`。
+> 3. **痛点三：长短生命周期失配引发内存泄漏**：短生命周期弹窗绑定了全局长生命周期通信服务事件未解绑，导致 View 永久无法释放。解法：弱事件模式、Prism 弱事件聚合器，或在 Unloaded 事件中规范注销。
+
+### 🔍 深入原理解析
+### 1. 弹窗服务抽象标准模式
+```csharp
+public interface IDialogService {
+    Task<bool> ShowConfirmAsync(string title, string message);
+    Task ShowAlarmModalAsync(AlarmLevel level, string errorDetail);
+}
+
+// ViewModel 中完全不依赖具体的 Window / MessageBox
+public class MainViewModel : BindableBase {
+    private readonly IDialogService _dialog;
+    public MainViewModel(IDialogService dialog) => _dialog = dialog;
+
+    public async Task OnEmergencyStopTriggered() {
+        bool confirm = await _dialog.ShowConfirmAsync("急停确认", "是否立即切断伺服动力电？");
+        if (confirm) ExecuteHardwareCutoff();
+    }
+}
+```
+
+### 🛠️ 上位机实战避坑（工程案例）
+在医疗测控上位机研发中，新手工程师在 ViewModel 中直接 `new ErrorAlertWindow().ShowDialog()`，导致该 ViewModel 强引用了具体的 WPF 窗口类，无法进行脱机单元测试，且在自动化测试流水线上直接挂死。重构为 `IDialogService` 后，单元测试中只需用 Moq 模拟注入 `Mock<IDialogService>`，直接模拟用户点击“确定”或“取消”，实现了 100% 自动化的工控业务逻辑测试。
+
+### ⚠️ 常见连环追问
+- Q: MVVM 模式下，自定义绘图控件（如足底压力热力图）如何与 ViewModel 高效交互？（答：不要用海量小控件做 Binding，而是在控件内暴露单个依赖属性绑定后，重写控件的 `OnRender` 使用 `DrawingContext` 直接绘制，将性能提升百倍）
+
+---
+
